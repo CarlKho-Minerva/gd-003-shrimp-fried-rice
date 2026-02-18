@@ -43,6 +43,7 @@ const CFG = {
   SPATULA_DAMAGE: 18,         // ↑ from 15 — hurts more
   PEPPER_DAMAGE: 12,          // ↑ from 10
   OILPOP_DAMAGE: 10,          // ↑ from 8
+  OBSTACLE_AIR_DRAIN: 8,       // Oil drained when obstacle fires while airborne (not damage, just oil cost)
 
   // ─── Stage 2: Chef Takes Matters Into His Own Hands ───
   // The chef reaches in to grab/stir/squish you. You swat his hand.

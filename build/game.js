@@ -289,6 +289,7 @@ window.addEventListener('keydown', e => {
     if (stage === STAGE.S2 && chef.state === 'holding') attemptSwat();
     else if (!shrimp.airborne) tossShrimp();
   }
+  if (e.code === 'Enter' && gameRunning && stage === STAGE.S2) attemptSwat();
   if (e.code === 'Space' && (stage === STAGE.GAMEOVER || stage === STAGE.VICTORY)) restartGame();
   // Skip calibration on desktop
   if (e.code === 'Escape' && stage === STAGE.CALIBRATE) skipCalibration();
@@ -380,6 +381,7 @@ function initGame() {
 }
 
 function setupDesktopFallback() {
+  ensureAudio();
   updatePhoneStatus('desktop');
   skipCalibration();
 }
@@ -452,7 +454,7 @@ function startTransition() {
 
   el.innerHTML = '<span style="color:#f7c948;font-size:32px">✨</span><br>The MSG... it\'s changing you...';
   setTimeout(() => {
-    el.innerHTML = '<span style="font-size:40px">🍤💪</span><br><span style="color:#f7c948;font-weight:800">THE CHEF TAKES MATTERS<br>INTO HIS OWN HANDS.</span><br><span style="font-size:14px;opacity:.6;margin-top:8px;display:inline-block">Swat his hand away! Shake hard or tap!</span>';
+    el.innerHTML = '<span style="font-size:40px">🍤💪</span><br><span style="color:#f7c948;font-weight:800">Wait—the chef noticed you.<br>He reaches into the wok...</span><br><span style="font-size:18px;color:#ff6b35;margin-top:8px;display:inline-block;font-weight:700">FIGHT BACK!</span><br><span style="font-size:14px;opacity:.6;margin-top:8px;display:inline-block">Swat his hand away! Shake hard or tap!</span>';
   }, 2500);
   setTimeout(() => {
     hideAllScreens();
@@ -572,15 +574,21 @@ function updateObstacles(dt) {
         if (!o.active) { o.active = true; o.timer = 0; break; }
         o.progress += o.speed * dt;
         if (o.progress >= 1) { o.done = true; break; }
-        if (!o.hitOnce && !shrimp.airborne) {
+        if (!o.hitOnce) {
           const sweepAngle = o.angle + o.progress * Math.PI;
           const cx = WOK.cx(), cy = WOK.cy(), r = WOK.radius() * 0.92;
           const ex = cx + Math.cos(sweepAngle) * r, ey = cy + Math.sin(sweepAngle) * r;
           if (ptSegDist(shrimp.x, shrimp.y, cx, cy, ex, ey) < shrimp.radius + 12) {
-            hitShrimp(CFG.SPATULA_DAMAGE);
-            o.hitOnce = true;
-            const ka = sweepAngle + Math.PI / 2;
-            shrimp.vx += Math.cos(ka) * 6; shrimp.vy += Math.sin(ka) * 6;
+            if (shrimp.airborne) {
+              // Airborne: no damage, but drain oil as a cost
+              oilLevel -= CFG.OBSTACLE_AIR_DRAIN;
+              o.hitOnce = true;
+            } else {
+              hitShrimp(CFG.SPATULA_DAMAGE);
+              o.hitOnce = true;
+              const ka = sweepAngle + Math.PI / 2;
+              shrimp.vx += Math.cos(ka) * 6; shrimp.vy += Math.sin(ka) * 6;
+            }
           }
         }
         break;
@@ -589,8 +597,13 @@ function updateObstacles(dt) {
         if (o.phase === 'warning' && o.timer >= o.warningDur) { o.phase = 'active'; o.timer = 0; addShake(3); playSound('pop'); }
         if (o.phase === 'active') {
           if (o.timer >= o.activeDur) { o.done = true; break; }
-          if (!o.hitOnce && !shrimp.airborne && dist(shrimp.x, shrimp.y, o.x, o.y) < shrimp.radius + o.maxRadius) {
-            hitShrimp(CFG.PEPPER_DAMAGE); o.hitOnce = true;
+          if (!o.hitOnce && dist(shrimp.x, shrimp.y, o.x, o.y) < shrimp.radius + o.maxRadius) {
+            if (shrimp.airborne) {
+              oilLevel -= CFG.OBSTACLE_AIR_DRAIN;
+              o.hitOnce = true;
+            } else {
+              hitShrimp(CFG.PEPPER_DAMAGE); o.hitOnce = true;
+            }
           }
         }
         break;
@@ -600,8 +613,13 @@ function updateObstacles(dt) {
         if (o.phase === 'pop') {
           const r = (o.timer / o.popDur) * o.maxRadius;
           if (o.timer >= o.popDur) { o.done = true; break; }
-          if (!o.hitOnce && !shrimp.airborne && dist(shrimp.x, shrimp.y, o.x, o.y) < shrimp.radius + r) {
-            hitShrimp(CFG.OILPOP_DAMAGE); o.hitOnce = true;
+          if (!o.hitOnce && dist(shrimp.x, shrimp.y, o.x, o.y) < shrimp.radius + r) {
+            if (shrimp.airborne) {
+              oilLevel -= CFG.OBSTACLE_AIR_DRAIN;
+              o.hitOnce = true;
+            } else {
+              hitShrimp(CFG.OILPOP_DAMAGE); o.hitOnce = true;
+            }
           }
         }
         break;

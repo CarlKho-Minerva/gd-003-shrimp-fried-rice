@@ -1,6 +1,6 @@
 # Shrimp Fried Rice — Changelog
 
-## v0.3 — "The Chef Takes Matters Into His Own Hands" (2025-07-23)
+## v0.3 — "The Chef Takes Matters Into His Own Hands" (2026-02-18)
 
 ### Architecture
 - **Split monolithic HTML into four files**: `index.html` (shell), `config.js` (tunable constants), `style.css` (all styles), `game.js` (logic). Old build backed up as `index_v02_backup.html`.
@@ -15,7 +15,7 @@
 | `MSG_SPAWN_INTERVAL` | 5 s | **8 s** | MSG was everywhere; now it's a decision point |
 | `MSG_MAX_ON_SCREEN` | 2 | **1** | One at a time = real tradeoff |
 | Obstacle damage | 10–15 | **15–25** | Hits should punish |
-| `OBSTACLE_AIR_DRAIN` | — | **8** | Can now drain oil while airborne via obstacles |
+| `OBSTACLE_AIR_DRAIN` | — | **8** | Obstacles drain oil even while airborne (no damage, just oil cost) |
 | Chef attack interval | ~2 s | **~1.5 s** | Chef is more aggressive in S2 |
 | Chef grab-hold oil drain | — | **8/sec** | Chef's hand actively drains oil while holding |
 
@@ -24,6 +24,7 @@
 - **New**: "the chef takes matters into his own hands"—his literal hand reaches into the wok and tries to grab + crush the shrimp. Being grabbed drains oil continuously. Swat (hard flick up) to escape.
 - Transition text: "Wait—the chef noticed you. He reaches into the wok... FIGHT BACK!"
 - Simpler, scarier, keeps the shrimp POV throughout.
+- Airborne is no longer full immunity: obstacles still drain oil (just no knockback/damage).
 
 ### Phone Calibration System
 - New `CALIBRATE` game state before Stage 1 begins.
@@ -40,7 +41,7 @@
 
 ### Desktop Fallback
 - "DESKTOP MODE" button on title screen calls `setupDesktopFallback()`.
-- Keyboard: arrow keys for tilt, space for toss, Enter for swat (S2).
+- Keyboard: arrow keys / WASD for tilt, Space for toss, Enter for swat (S2), Escape to skip calibration.
 - Needed for testing/demoing without a phone rig.
 
 ### Zip / Itch.io

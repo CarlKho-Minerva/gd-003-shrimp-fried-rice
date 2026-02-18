@@ -37,9 +37,10 @@ Inspired by the "Ratatouille moment"—the absurd chaos that erupts when the cul
 If you don't have a phone/sensors available:
 1.  Click **Desktop Mode** on the title screen.
 2.  **Controls**:
-    -   **Arrow Keys**: Tilt/Slide
+    -   **Arrow Keys / WASD**: Tilt/Slide
     -   **Spacebar**: Toss
     -   **Enter**: Swat (Stage 2)
+    -   **Escape**: Skip calibration
 
 ---
 
@@ -53,17 +54,20 @@ If you don't have a phone/sensors available:
 -   `CHANGELOG.md`: Detailed history of versions and hardware roadmap.
 -   `shrimp-fried-rice-v03.zip`: Production-ready bundle.
 
+
 ---
 
-## 🔧 Hardware Roadmap (GDC Alt. Ctrl.)
+## 🔧 Hardware Roadmap (GDC Alt. Ctrl.) — Not Yet Implemented
 
-For the full arcade experience, we recommend:
+For the full arcade experience (future build):
 -   **Wok**: A standard cooking wok.
 -   **Sensors**:
     -   **MPU-6050 (IMU)**: For 6-axis motion tracking.
     -   **Piezo Element**: Attached to the wok exterior for impact detection (swats).
     -   **FSR (Force-Sensitive Resistor)**: Under the wok feet to detect pressure.
 -   **ESP32**: To stream sensor data to the browser via WebSockets.
+
+See [CHANGELOG.md](CHANGELOG.md) for full roadmap notes including Stage 3 "Kitchen Pandemonium" concept.
 
 ---
 
