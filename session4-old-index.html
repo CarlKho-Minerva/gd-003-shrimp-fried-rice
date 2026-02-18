@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>🍤 Shrimp Fried Rice — GDC Alt. Ctrl. Prototype</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap');
+
+  /* polished styles */
+  body {
+    background: radial-gradient(circle at center, #1a1a24 0%, #050508 100%);
+    font-family: 'Outfit', sans-serif;
+    overflow: hidden;
+    height: 100dvh;
+    width: 100vw;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    color: #fff;
+  }
+
+  #game-canvas {
+    display: block;
+    border-radius: 50%; /* circular clipping match */
+    box-shadow:
+      inset 0 0 40px rgba(0,0,0,0.8),
+      0 20px 60px rgba(0,0,0,0.4),
+      0 0 0 12px rgba(40, 40, 40, 0.5); /* rim */
+  }
+
+  /* Screen Containers - Absolute to overlay correctly */
+  .screen {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 10, 15, 0.95); /* darker background for screens */
+    backdrop-filter: blur(12px);
+    transition: opacity 0.3s ease;
+  }
+
+  /* Initial Visibility States (Hidden by default via JS, but helpful here) */
+  #gameover-screen, #hud, #burn-bar-container, #burn-label { display: none; }
+
+  /* HUD overlay */
+  #hud {
+    position: fixed; /* Explicit active state style */
+    top: 24px; left: 24px; right: 24px;
+    z-index: 20;
+    display: none; /* Initially hidden */
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+  }
+
+  .hud-block {
+    background: rgba(20, 20, 25, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    border-radius: 12px;
+    padding: 10px 16px;
+    color: #fff;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .hud-block .label { color: rgba(255,255,255,0.6); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+  .hud-block .value { font-weight: 800; font-size: 22px; }
+
+  #burn-bar-container {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(90vw, 500px);
+    height: 18px;
+    background: rgba(20, 20, 25, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    padding: 3px;
+    z-index: 10;
+  }
+  #burn-bar {
+    border-radius: 12px;
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #44ff44, #ffaa00, #ff4444);
+    box-shadow: 0 0 10px currentColor;
+    transition: width 0.1s linear;
+  }
+
+  #burn-label {
+    position: fixed;
+    bottom: 54px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255,255,255,0.6);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    z-index: 10;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+  }
+
+  /* Burning Animation */
+  @keyframes blinkDanger {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; color: #ff0000; text-shadow: 0 0 15px #ff0000; transform: translateX(-50%) scale(1.15); }
+  }
+  .is-burning {
+    animation: blinkDanger 0.2s infinite;
+  }
+
+  @keyframes screenPulse {
+    0%, 100% { box-shadow: inset 0 0 0px rgba(255, 0, 0, 0); }
+    50% { box-shadow: inset 0 0 100px rgba(255, 0, 0, 0.4); }
+  }
+  .burn-pulse {
+    animation: screenPulse 0.4s infinite;
+  }
+
+  /* Typography */
+  h1 {
+    font-size: clamp(42px, 8vw, 64px);
+    font-weight: 800;
+    background: linear-gradient(135deg, #ffaa66, #ffdf88); /* brighter gold/orange */
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-align: center;
+    line-height: 1.1;
+    margin-bottom: 8px;
+    filter: drop-shadow(0 4px 12px rgba(255, 120, 40, 0.4));
+  }
+
+  .subtitle {
+    color: #888;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-bottom: 16px;
+  }
+
+  .controls-info {
+    background: rgba(255,255,255,0.08); /* lighter bg */
+    border: 1px solid rgba(255,255,255,0.1);
+    padding: 24px;
+    border-radius: 16px;
+    color: #ddd; /* lighter text */
+    font-size: 15px;
+    text-align: center;
+    max-width: 400px;
+    line-height: 1.6;
+    margin-top: 24px;
+  }
+
+  .controls-info strong { color: #f7c948; }
+
+  button {
+    margin-top: 32px;
+    padding: 18px 56px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: #0a0a0f;
+    background: linear-gradient(135deg, #f7c948, #ff6b35);
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+    box-shadow: 0 8px 32px rgba(255, 107, 53, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  button:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 12px 40px rgba(255, 107, 53, 0.6);
+    filter: brightness(1.1);
+  }
+
+  button:active { transform: scale(0.98); }
+
+  /* Final Score logic */
+  .score-display {
+    font-size: 24px;
+    color: rgba(255,255,255,0.8);
+    margin-top: 10px;
+  }
+  .score-display span { color: #f7c948; font-size: 32px; }
+
+  .msg-popup {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    animation: floatUp 0.8s ease-out forwards;
+    text-align: center;
+    z-index: 50;
+    color: #ffd700; /* Gold */
+    font-weight: 800;
+    font-size: 24px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  }
+  @keyframes floatUp {
+    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+    20% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+    100% { transform: translate(-50%, -150%) scale(1); opacity: 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- CLICK TO START OVERLAY (Minimal) -->
+<div id="start-overlay" class="screen" style="background: rgba(0,0,0,0.4); cursor: pointer;" onclick="initGame()">
+  <div style="font-size: 14px; opacity: 0.7; letter-spacing: 2px; text-transform: uppercase;">Tap to Cook</div>
+</div>
+
+<!-- GAME OVER SCREEN -->
+<div id="gameover-screen" class="screen">
+  <h1>BURNT / NO OIL</h1>
+  <div class="score-display">Oil Drops: <span id="final-score">0</span></div>
+  <div style="font-size: 14px; opacity: 0.5; margin-top: 12px; font-style: italic;">Ran out of oil... pan got sticky...</div>
+  <div style="margin-top: 24px; font-size: 12px; opacity: 0.4; letter-spacing: 1px;">PRESS SPACE OR TAP TO COOK AGAIN</div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-block">
+    <div class="label">DROPS</div>
+    <div class="value" id="hud-msg" style="color:#ffd700">0</div>
+  </div>
+  <div class="hud-block" style="text-align:right;">
+    <div class="label">Time</div>
+    <div class="value" id="hud-time">0:00</div>
+  </div>
+</div>
+
+<div id="burn-label">OIL LEVEL</div>
+<div id="burn-bar-container">
+  <div id="burn-bar"></div>
+</div>
+
+<canvas id="game-canvas"></canvas>
+
+<script>
+// ============================================================
+//  SHRIMP FRIED RICE — HIGH FIDELITY PROTOTYPE
+// ============================================================
+
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+
+// --- High DPI Scaling ---
+function resize() {
+  const maxW = 600;
+  const sizeCSS = Math.min(window.innerWidth - 32, window.innerHeight - 140, maxW);
+  const dpr = window.devicePixelRatio || 1;
+
+  canvas.width = sizeCSS * dpr;
+  canvas.height = sizeCSS * dpr;
+  canvas.style.width = sizeCSS + 'px';
+  canvas.style.height = sizeCSS + 'px';
+
+  ctx.scale(dpr, dpr);
+
+  // Update game world dimensions relative to CSS pixels
+  WOK.size = sizeCSS;
+  if(shrimp.x === 0) { // First run init
+     shrimp.x = WOK.cx();
+     shrimp.y = WOK.cy();
+  }
+}
+
+// Wok Geometry
+const WOK = {
+  size: 500,
+  cx: () => WOK.size / 2,
+  cy: () => WOK.size / 2,
+  radius: () => WOK.size * 0.46,
+  innerRadius: () => WOK.size * 0.15,
+};
+
+window.addEventListener('resize', resize);
+
+// --- Game State ---
+let gameRunning = false;
+let gamePaused = false;
+let mouseX = 0, mouseY = 0;
+
+// Shrimp
+let shrimp = {
+  x: 0, y: 0, vx: 0, vy: 0,
+  radius: 14,
+  airborne: false, airTime: 0, scale: 1,
+  angle: 0, wobble: 0
+};
+
+// Physics Tweaks (Heavier, less buzzing)
+const GRAVITY_FACTOR = 0.8;
+const BASE_DRAG = 0.88;     // Renamed to BASE_DRAG
+const BOUNCE = 0.3;
+const TOSS_THRESHOLD = 15;
+const TOSS_FORCE = 15;
+const AIR_DURATION = 1.0;
+
+// Oil / Survival Mechanic
+let oilLevel = 100;
+const OIL_MAX = 100;
+const OIL_DRAIN_BASE = 0.5;
+const OIL_DRAIN_MOVE = 0.02; // Significantly faster movement drain
+let currentDrag = BASE_DRAG;
+let burnMeter = 0;
+const BURN_MAX = 100;
+const BURN_RATE_GROWTH = 60; // Faster death buffer
+const BURN_RATE_COOL = 20;
+
+// Oil Drops
+let oilItems = [];
+let oilCollected = 0;
+let oilSpawnTimer = 0;
+const OIL_SPAWN_INTERVAL = 4;
+const OIL_RADIUS = 18;
+
+// Input
+let tiltX = 0, tiltY = 0;
+let hasDeviceOrientation = false;
+let accelMagnitude = 0;
+let lastAccel = { x: 0, y: 0, z: 0 };
+let keys = {};
+
+// Timer
+let gameTime = 0;
+let particles = [];
+
+// ============================================================
+//  UI STATE MANAGEMENT
+// ============================================================
+
+const ui = {
+  start: document.getElementById('start-overlay'),
+  gameOver: document.getElementById('gameover-screen'),
+  hud: document.getElementById('hud'),
+  burnLabel: document.getElementById('burn-label'),
+  burnBar: document.getElementById('burn-bar-container'),
+  finalScore: document.getElementById('final-score')
+};
+
+function showScreen(screen) {
+  ui.start.style.display = 'none';
+  ui.gameOver.style.display = 'none';
+  ui.hud.style.display = 'none';
+  ui.burnLabel.style.display = 'none';
+  ui.burnBar.style.display = 'none';
+
+  if (screen) screen.style.display = 'flex';
+}
+
+function initGame() {
+  // Mobile Permission Request (Must be triggered by user gesture)
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission()
+      .then(response => {
+        if (response === 'granted') {
+          setupDeviceOrientation();
+          setupDeviceMotion();
+        } else {
+          alert("Sensor permission is required for tilt controls.");
+        }
+      })
+      .catch(console.error);
+  } else {
+    // Non-iOS or older devices
+    setupDeviceOrientation();
+    setupDeviceMotion();
+  }
+
+  startGame();
+}
+
+function startGame() {
+  resetGame();
+  gameRunning = true;
+
+  // UI transition
+  showScreen(null); // hide all overlay screens
+  ui.hud.style.display = 'flex';
+  ui.burnLabel.style.display = 'block';
+  ui.burnBar.style.display = 'block';
+
+  spawnOil();
+}
+
+function gameOver() {
+  gameRunning = false;
+  ui.finalScore.textContent = oilCollected;
+  showScreen(ui.gameOver);
+}
+
+function resetGame() {
+  resize();
+  shrimp.x = WOK.cx();
+  shrimp.y = WOK.cy();
+  shrimp.vx = 0;
+  shrimp.vy = 0;
+  shrimp.airborne = false;
+  shrimp.airTime = 0;
+  shrimp.scale = 1;
+  shrimp.angle = 0;
+  shrimp.wobble = 0;
+  oilLevel = OIL_MAX; // Start full
+  oilItems = [];
+  oilCollected = 0;
+  oilSpawnTimer = 0;
+  burnMeter = 0;
+  document.body.classList.remove('burn-pulse');
+  gameTime = 0;
+  particles = [];
+  tiltX = 0;
+  tiltY = 0;
+}
+
+// ============================================================
+//  INPUT HANDLING
+// ============================================================
+
+function setupDeviceOrientation() {
+  window.addEventListener('deviceorientation', (e) => {
+    // Ignore invalid or null data (often fired on desktop)
+    if (e.gamma === null || e.beta === null) return;
+
+    hasDeviceOrientation = true;
+    tiltX = (e.gamma || 0) / 45;
+    tiltY = (e.beta || 0) / 45;
+    tiltX = Math.max(-1, Math.min(1, tiltX));
+    tiltY = Math.max(-1, Math.min(1, tiltY));
+  });
+}
+
+function setupDeviceMotion() {
+  window.addEventListener('devicemotion', (e) => {
+    const a = e.accelerationIncludingGravity;
+    if (!a) return;
+    const dx = a.x - lastAccel.x;
+    const dy = a.y - lastAccel.y;
+    const dz = a.z - lastAccel.z;
+    accelMagnitude = Math.sqrt(dx*dx + dy*dy + dz*dz);
+    lastAccel = { x: a.x, y: a.y, z: a.z };
+
+    if (accelMagnitude > TOSS_THRESHOLD && gameRunning && !shrimp.airborne) {
+      tossShrimp();
+    }
+  });
+}
+
+// Mouse / Touch (Desktop Testing)
+window.addEventListener('mousemove', e => {
+  if (hasDeviceOrientation) return;
+  // Normalize mouse pos relative to center
+  const rect = canvas.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  // Sensitivity factor
+  tiltX = (e.clientX - cx) / (rect.width * 0.4);
+  tiltY = (e.clientY - cy) / (rect.height * 0.4);
+  tiltX = Math.max(-1, Math.min(1, tiltX));
+  tiltY = Math.max(-1, Math.min(1, tiltY));
+});
+
+window.addEventListener('mousedown', () => {
+  if (gameRunning && !shrimp.airborne) tossShrimp();
+});
+
+// Keyboard
+window.addEventListener('keydown', e => {
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) {
+    e.preventDefault();
+  }
+  keys[e.code] = true;
+  if (e.code === 'Space') {
+    if (gameRunning) tossShrimp();
+    else startGame(); // Reset if game over or not running
+  }
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// ============================================================
+//  GAME LOGIC
+// ============================================================
+
+function tossShrimp() {
+  if (shrimp.airborne) return;
+  shrimp.airborne = true;
+  shrimp.airTime = AIR_DURATION;
+  shrimp.scale = 1.6;
+
+  // Toss particles
+  for (let i = 0; i < 12; i++) {
+    spawnParticle(shrimp.x, shrimp.y, '#ffffff', 2, 6);
+  }
+}
+
+function spawnParticle(x, y, color, speed, size) {
+  particles.push({
+    x: x, y: y,
+    vx: (Math.random() - 0.5) * speed,
+    vy: (Math.random() - 0.5) * speed,
+    life: 0.5 + Math.random() * 0.4,
+    maxLife: 0.8,
+    color: color,
+    size: size + Math.random() * size
+  });
+}
+
+function spawnOil() {
+  const angle = Math.random() * Math.PI * 2;
+  const dist = Math.random() * (WOK.radius() - OIL_RADIUS - 30) * 0.8;
+  oilItems.push({
+    x: WOK.cx() + Math.cos(angle) * dist,
+    y: WOK.cy() + Math.sin(angle) * dist,
+    radius: OIL_RADIUS,
+    bobPhase: Math.random() * Math.PI * 2,
+    collected: false,
+    spawnTime: performance.now()
+  });
+}
+
+// ============================================================
+//  UPDATE LOOP
+// ============================================================
+
+let lastTime = performance.now();
+
+function update() {
+  const now = performance.now();
+  const dt = Math.min((now - lastTime) / 1000, 0.05); // cap delta
+  lastTime = now;
+
+  requestAnimationFrame(update);
+
+  if (!gameRunning) return; // Stop config updates if paused
+
+  gameTime += dt;
+
+  // --- Keyboard input override ---
+  if (!hasDeviceOrientation && (keys['ArrowLeft'] || keys['ArrowRight'] || keys['ArrowUp'] || keys['ArrowDown'])) {
+    tiltX = 0; tiltY = 0;
+    if (keys['ArrowLeft'] || keys['KeyA']) tiltX = -0.8;
+    if (keys['ArrowRight'] || keys['KeyD']) tiltX = 0.8;
+    if (keys['ArrowUp'] || keys['KeyW']) tiltY = -0.8;
+    if (keys['ArrowDown'] || keys['KeyS']) tiltY = 0.8;
+  }
+
+  // --- Shrimp physics ---
+  if (!shrimp.airborne) {
+    // Stickiness based on Oil Level (0-100)
+    // Full Oil (100) -> 0.88. Empty (0) -> 0.75 (Sticky).
+    currentDrag = 0.75 + (0.13 * (oilLevel / OIL_MAX));
+
+    shrimp.vx += tiltX * GRAVITY_FACTOR * 60 * dt;
+    shrimp.vy += tiltY * GRAVITY_FACTOR * 60 * dt;
+
+    // Movement Angle for visuals
+    if (Math.abs(shrimp.vx) > 0.1 || Math.abs(shrimp.vy) > 0.1) {
+      shrimp.angle = Math.atan2(shrimp.vy, shrimp.vx);
+    }
+
+    // Procedural Wobble
+    const speed = Math.sqrt(shrimp.vx*shrimp.vx + shrimp.vy*shrimp.vy);
+    shrimp.wobble = Math.sin(gameTime * 15) * Math.min(speed * 0.1, 0.5);
+
+    shrimp.vx *= currentDrag;
+    shrimp.vy *= currentDrag;
+
+    shrimp.x += shrimp.vx;
+    shrimp.y += shrimp.vy;
+
+    // Constrain
+    const dx = shrimp.x - WOK.cx();
+    const dy = shrimp.y - WOK.cy();
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const maxDist = WOK.radius() - shrimp.radius;
+
+    if (dist > maxDist) {
+      const nx = dx / dist;
+      const ny = dy / dist;
+      shrimp.x = WOK.cx() + nx * maxDist;
+      shrimp.y = WOK.cy() + ny * maxDist;
+
+      const dot = shrimp.vx * nx + shrimp.vy * ny;
+      shrimp.vx -= 2 * dot * nx * (1 - BOUNCE);
+      shrimp.vy -= 2 * dot * ny * (1 - BOUNCE);
+
+      spawnParticle(shrimp.x, shrimp.y, '#ffaa33', 4, 3);
+    }
+
+    // Dynamic Oil Drain (Based on Speed)
+    let drain = OIL_DRAIN_BASE;
+    if (speed > 1) drain += speed * OIL_DRAIN_MOVE;
+
+    if (oilLevel > 0) {
+      oilLevel -= drain * dt;
+      burnMeter = Math.max(0, burnMeter - BURN_RATE_COOL * dt);
+    } else {
+      burnMeter += BURN_RATE_GROWTH * dt;
+    }
+
+  } else {
+    // Airborne
+    shrimp.airTime -= dt;
+    // Parabolic arc scale
+    const progress = 1 - (shrimp.airTime / AIR_DURATION);
+    shrimp.scale = 1 + Math.sin(progress * Math.PI) * 1.5; // Big zoom!
+
+    shrimp.vx += tiltX * GRAVITY_FACTOR * 0.1;
+    shrimp.vy += tiltY * GRAVITY_FACTOR * 0.1;
+    shrimp.x += shrimp.vx;
+    shrimp.y += shrimp.vy;
+
+    const dx = shrimp.x - WOK.cx();
+    const dy = shrimp.y - WOK.cy();
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist > WOK.radius() - shrimp.radius) {
+       shrimp.x = WOK.cx() + (dx/dist)*(WOK.radius()-shrimp.radius);
+       shrimp.y = WOK.cy() + (dy/dist)*(WOK.radius()-shrimp.radius);
+    }
+
+    // Oil Drain (Constant slower in air)
+    if (oilLevel > 0) {
+      oilLevel -= OIL_DRAIN_BASE * 0.5 * dt;
+      burnMeter = Math.max(0, burnMeter - BURN_RATE_COOL * dt);
+    } else {
+      burnMeter += BURN_RATE_GROWTH * dt;
+    }
+
+    if (shrimp.airTime <= 0) {
+      shrimp.airborne = false;
+      shrimp.scale = 1;
+      for (let i = 0; i < 8; i++) spawnParticle(shrimp.x, shrimp.y, '#ffd700', 6, 4);
+    }
+  }
+
+  oilLevel = Math.max(0, Math.min(OIL_MAX, oilLevel));
+  burnMeter = Math.max(0, Math.min(BURN_MAX, burnMeter));
+
+  if (burnMeter >= BURN_MAX) { gameOver(); return; }
+
+  // Collision
+  for (let i = oilItems.length - 1; i >= 0; i--) {
+    const m = oilItems[i];
+    if (m.collected) continue;
+    const dx = shrimp.x - m.x;
+    const dy = shrimp.y - m.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    // Hitbox larger when airborne
+    const hitRadius = (shrimp.radius * shrimp.scale) + m.radius;
+
+    // User Rule: Only collect if airborne (jumping) AND hit it
+    if (dist < hitRadius && shrimp.airborne) {
+      m.collected = true;
+      oilCollected++;
+      oilLevel = Math.min(OIL_MAX, oilLevel + 20); // Refill
+
+      // Popup
+      const popup = document.createElement('div');
+      popup.className = 'msg-popup';
+      popup.innerHTML = '+OIL<br><span style="font-size:0.5em">SLICK!</span>';
+
+      // Position correctly
+      const rect = canvas.getBoundingClientRect();
+      const ratio = rect.width / WOK.size;
+      popup.style.left = (rect.left + m.x * ratio) + 'px';
+      popup.style.top = (rect.top + m.y * ratio) + 'px';
+
+      document.body.appendChild(popup);
+      setTimeout(() => popup.remove(), 800);
+
+      // Particles
+      for (let j = 0; j < 15; j++) spawnParticle(m.x, m.y, '#ffd700', 8, 5);
+
+      setTimeout(() => oilItems.splice(oilItems.indexOf(m), 1), 100);
+    }
+  }
+
+  oilSpawnTimer += dt;
+  if (oilSpawnTimer >= OIL_SPAWN_INTERVAL) {
+    oilSpawnTimer = 0;
+    if (oilItems.filter(m => !m.collected).length < 4) spawnOil();
+  }
+
+  // Update particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+
+  updateHUD();
+  draw();
+}
+
+function updateHUD() {
+  document.getElementById('hud-msg').textContent = oilCollected;
+  const mins = Math.floor(gameTime / 60);
+  const secs = Math.floor(gameTime % 60);
+  document.getElementById('hud-time').textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+
+  const bar = document.getElementById('burn-bar');
+  const label = document.getElementById('burn-label');
+
+  if (oilLevel > 0) {
+    // Normal Oil Display
+    const oilPct = (oilLevel / OIL_MAX) * 100;
+    bar.style.width = oilPct + '%';
+    bar.style.boxShadow = `0 0 10px currentColor`;
+    label.textContent = "OIL LEVEL";
+    label.classList.remove('is-burning');
+
+    // Green -> Yellow -> Red
+    if (oilPct > 60) bar.style.background = '#44ff44';
+    else if (oilPct > 25) bar.style.background = '#ffd700';
+    else bar.style.background = '#ff4444';
+
+  } else {
+    // BURNING STATE (Oil is empty, burn meter is rising)
+    const burnPct = (burnMeter / BURN_MAX) * 100;
+    bar.style.width = burnPct + '%';
+    // Warning Stripes for burning
+    bar.style.background = `repeating-linear-gradient(45deg, #ff0000, #ff0000 10px, #cc0000 10px, #cc0000 20px)`;
+    bar.style.boxShadow = `0 0 15px #ff0000`;
+
+    label.textContent = "BURNING!";
+    label.classList.add('is-burning');
+    document.body.classList.add('burn-pulse');
+  }
+}
+
+// ============================================================
+//  RENDERING
+// ============================================================
+
+function draw() {
+  const cx = WOK.cx(), cy = WOK.cy(), r = WOK.radius();
+
+  // Draw Background (Table) - Clears canvas
+  ctx.fillStyle = '#0a0a10';
+  ctx.fillRect(0,0, canvas.width, canvas.height); // clear
+
+  // --- Wok Rendering (Polished) ---
+
+  // Wok Body Gradient (Brighter for visibility)
+  const wokGrad = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r);
+  wokGrad.addColorStop(0, '#3e3e4a');   // lighter center
+  wokGrad.addColorStop(0.5, '#2a2a30'); // lighter mid
+  wokGrad.addColorStop(1, '#15151a');    // dark rim
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = wokGrad;
+  ctx.fill();
+
+  // Wok Texture (Brushed Metal approximations using rings)
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)'; // slightly stronger texture
+  ctx.lineWidth = 1;
+  for(let i=0; i<r; i+=8) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, i, 0, Math.PI*2);
+    ctx.stroke();
+  }
+
+  // Heat Zone (Dynamic) - Now reflects heat (always hot)
+  const pulse = Math.sin(gameTime * 4) * 0.05 + 1;
+  // Intensity increases as oil decreases (hotter/dryer)
+  const heatIntensity = 0.2 + ((OIL_MAX - oilLevel)/OIL_MAX) * 0.4;
+  const heatGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, WOK.innerRadius() * (1 + heatIntensity));
+  heatGrad.addColorStop(0, `rgba(255, 80, 40, ${heatIntensity})`); // warmer orange
+  heatGrad.addColorStop(1, 'rgba(255, 60, 20, 0)');
+
+  ctx.globalCompositeOperation = 'screen'; // Use screen blend for glow
+  ctx.beginPath();
+  ctx.arc(cx, cy, WOK.innerRadius() * 2, 0, Math.PI * 2);
+  ctx.fillStyle = heatGrad;
+  ctx.fill();
+  ctx.globalCompositeOperation = 'source-over'; // Reset
+
+  // Oil/Sheen
+  const sheenX = cx - tiltX * 20; // Reduced from 50 (subtle)
+  const sheenY = cy - tiltY * 20;
+  const sheenGrad = ctx.createRadialGradient(sheenX, sheenY, 0, sheenX, sheenY, r * 0.6);
+  sheenGrad.addColorStop(0, 'rgba(255, 255, 255, 0.08)');
+  sheenGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = sheenGrad;
+  ctx.fill();
+
+  // Oil Items
+  for (const m of oilItems) {
+    if (m.collected) continue;
+
+    const bob = Math.sin(gameTime * 3 + m.bobPhase) * 4;
+
+    // Glow
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#ffd700'; // Gold glow
+    ctx.fillStyle = '#ffaa00';   // Amber oil color
+    ctx.beginPath();
+    ctx.arc(m.x, m.y + bob, m.radius * 0.6, 0, Math.PI * 2); // Slightly smaller drop
+    ctx.fill();
+
+    // Highlight (Shiny)
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(m.x - m.radius*0.2, m.y + bob - m.radius*0.2, m.radius * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+
+    /* No text icon for oil, just shiny drop */
+  }
+
+  drawParticles();
+  drawShrimp(shrimp.x, shrimp.y, shrimp.scale, shrimp.airborne);
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    const alpha = p.life / p.maxLife;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawShrimp(x, y, scale, airborne) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+
+  // Rotation relative to velocity
+  if (!airborne) ctx.rotate(shrimp.angle);
+
+  // Shadow
+  if (airborne) {
+    ctx.save();
+    ctx.translate(10, 20); // offset shadow
+    ctx.scale(1, 0.5);
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.beginPath();
+    ctx.arc(0, 0, shrimp.radius, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Dynamic Color based on Burn Meter (0 = Good, 1 = Burnt)
+  const burnTint = burnMeter / BURN_MAX;
+  const r = Math.min(255, 255 * (0.8 + burnTint * 0.4));
+  const g = Math.max(50, 140 * (1 - burnTint));
+  const b = Math.max(50, 100 * (1 - burnTint));
+  const bodyColor = `rgb(${r},${g},${b})`;
+
+  // Body Segments (Proc Anim)
+  const segments = 5;
+  for(let i=0; i<segments; i++) {
+    // Bend body
+    const offset = Math.sin(gameTime * 20 + i) * (airborne ? 2 : shrimp.wobble * 10);
+    const size = shrimp.radius * (1 - i * 0.15);
+    const posX = -i * 6;
+    const posY = offset;
+
+    ctx.fillStyle = bodyColor;
+    ctx.beginPath();
+    ctx.arc(posX, posY, size, 0, Math.PI*2);
+    ctx.fill();
+
+    // Stripe
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // Eyes
+  ctx.fillStyle = '#111';
+  ctx.beginPath();
+  ctx.arc(4, -4, 3, 0, Math.PI*2);
+  ctx.arc(4, 4, 3, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(5, -5, 1, 0, Math.PI*2);
+  ctx.arc(5, 3, 1, 0, Math.PI*2);
+  ctx.fill();
+
+  // Burn Smoke
+  if (burnTint > 0.6 && Math.random() > 0.7) {
+    spawnParticle(x, y, '#555', 2, 4);
+  }
+
+  ctx.restore();
+}
+
+// ============================================================
+//  MAIN
+// ============================================================
+requestAnimationFrame(update);
+</script>
+</body>
+</html>

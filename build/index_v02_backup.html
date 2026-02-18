@@ -1,0 +1,1560 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>🍤 Shrimp Fried Rice — GDC Alt. Ctrl. Prototype</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box
+        }
+
+        body {
+            background: radial-gradient(circle at center, #1a1a24 0%, #050508 100%);
+            font-family: 'Outfit', sans-serif;
+            overflow: hidden;
+            height: 100dvh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+            color: #fff;
+        }
+
+        #game-canvas {
+            display: block;
+            border-radius: 50%;
+            box-shadow: inset 0 0 40px rgba(0, 0, 0, .8), 0 20px 60px rgba(0, 0, 0, .4), 0 0 0 12px rgba(40, 40, 40, .5)
+        }
+
+        .screen {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(10, 10, 15, .95);
+            backdrop-filter: blur(12px);
+            transition: opacity .3s ease
+        }
+
+        h1 {
+            font-size: clamp(42px, 8vw, 64px);
+            font-weight: 800;
+            background: linear-gradient(135deg, #ffaa66, #ffdf88);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+            line-height: 1.1;
+            margin-bottom: 8px;
+            filter: drop-shadow(0 4px 12px rgba(255, 120, 40, .4))
+        }
+
+        .subtitle {
+            color: #888;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 16px
+        }
+
+        .controls-info {
+            background: rgba(255, 255, 255, .08);
+            border: 1px solid rgba(255, 255, 255, .1);
+            padding: 24px;
+            border-radius: 16px;
+            color: #ddd;
+            font-size: 15px;
+            text-align: center;
+            max-width: 400px;
+            line-height: 1.6;
+            margin-top: 24px
+        }
+
+        .controls-info strong {
+            color: #f7c948
+        }
+
+        button {
+            margin-top: 32px;
+            padding: 18px 56px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 20px;
+            font-weight: 700;
+            color: #0a0a0f;
+            background: linear-gradient(135deg, #f7c948, #ff6b35);
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all .2s cubic-bezier(.25, 1, .5, 1);
+            box-shadow: 0 8px 32px rgba(255, 107, 53, .4);
+            text-transform: uppercase;
+            letter-spacing: 1px
+        }
+
+        button:hover {
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 12px 40px rgba(255, 107, 53, .6);
+            filter: brightness(1.1)
+        }
+
+        button:active {
+            transform: scale(.98)
+        }
+
+        .score-display {
+            font-size: 20px;
+            color: rgba(255, 255, 255, .8);
+            margin-top: 10px;
+            line-height: 1.8
+        }
+
+        .score-display span {
+            color: #f7c948;
+            font-weight: 800
+        }
+
+        /* HUD */
+        #hud {
+            position: fixed;
+            top: 24px;
+            left: 24px;
+            right: 24px;
+            z-index: 20;
+            display: none;
+            justify-content: space-between;
+            align-items: flex-start;
+            pointer-events: none
+        }
+
+        .hud-block {
+            background: rgba(20, 20, 25, .85);
+            border: 1px solid rgba(255, 255, 255, .15);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, .3);
+            border-radius: 12px;
+            padding: 10px 16px;
+            color: #fff;
+            font-size: 14px;
+            line-height: 1.5
+        }
+
+        .hud-block .label {
+            color: rgba(255, 255, 255, .6);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px
+        }
+
+        .hud-block .value {
+            font-weight: 800;
+            font-size: 22px
+        }
+
+        /* Bars */
+        .bar-container {
+            position: fixed;
+            left: 50%;
+            transform: translateX(-50%);
+            height: 18px;
+            background: rgba(20, 20, 25, .85);
+            border: 1px solid rgba(255, 255, 255, .2);
+            border-radius: 20px;
+            padding: 3px;
+            z-index: 10
+        }
+
+        #oil-bar-wrap {
+            bottom: 30px;
+            width: min(90vw, 500px)
+        }
+
+        #chef-bar-wrap {
+            top: 80px;
+            width: min(70vw, 350px);
+            display: none
+        }
+
+        .bar-fill {
+            border-radius: 12px;
+            height: 100%;
+            width: 0%;
+            transition: width .1s linear
+        }
+
+        #oil-bar {
+            background: linear-gradient(90deg, #44ff44, #ffaa00, #ff4444);
+            box-shadow: 0 0 10px currentColor
+        }
+
+        #chef-bar {
+            background: linear-gradient(90deg, #ff4444, #ff8844);
+            box-shadow: 0 0 10px #ff4444
+        }
+
+        .bar-label {
+            position: fixed;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, .6);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            z-index: 10;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, .8)
+        }
+
+        #oil-label {
+            bottom: 54px
+        }
+
+        #chef-label {
+            top: 64px;
+            display: none
+        }
+
+        /* Stage announcement */
+        #stage-announce {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 200;
+            pointer-events: none;
+            text-align: center;
+            opacity: 0;
+            transition: opacity .3s
+        }
+
+        #stage-announce h2 {
+            font-size: clamp(28px, 6vw, 48px);
+            font-weight: 800;
+            color: #fff;
+            text-shadow: 0 0 30px rgba(255, 150, 50, .8);
+            letter-spacing: 4px
+        }
+
+        #stage-announce .stage-sub {
+            font-size: 16px;
+            color: #f7c948;
+            margin-top: 8px;
+            letter-spacing: 2px
+        }
+
+        /* Burn animations */
+        @keyframes blinkDanger {
+
+            0%,
+            100% {
+                opacity: .6
+            }
+
+            50% {
+                opacity: 1;
+                color: #f00;
+                text-shadow: 0 0 15px #f00;
+                transform: translateX(-50%) scale(1.15)
+            }
+        }
+
+        .is-burning {
+            animation: blinkDanger .2s infinite
+        }
+
+        @keyframes screenPulse {
+
+            0%,
+            100% {
+                box-shadow: inset 0 0 0 rgba(255, 0, 0, 0)
+            }
+
+            50% {
+                box-shadow: inset 0 0 100px rgba(255, 0, 0, .4)
+            }
+        }
+
+        .burn-pulse {
+            animation: screenPulse .4s infinite
+        }
+
+        /* Popups */
+        .msg-popup {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            animation: floatUp .8s ease-out forwards;
+            text-align: center;
+            z-index: 50;
+            font-weight: 800;
+            font-size: 24px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, .5)
+        }
+
+        @keyframes floatUp {
+            0% {
+                transform: translate(-50%, -50%) scale(.5);
+                opacity: 0
+            }
+
+            20% {
+                transform: translate(-50%, -50%) scale(1.2);
+                opacity: 1
+            }
+
+            100% {
+                transform: translate(-50%, -150%) scale(1);
+                opacity: 0
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ═══ TITLE SCREEN ═══ -->
+    <div id="title-screen" class="screen">
+        <h1>SHRIMP<br>FRIED<br>RICE</h1>
+        <div class="subtitle">GDC Alt. Ctrl. Prototype</div>
+        <div class="controls-info">
+            <strong>Tilt</strong> to slide&ensp;·&ensp;<strong>Shake</strong> to toss<br>
+            Collect <strong>MSG</strong> to transform<br>
+            Then <strong>SWAT</strong> the chef 🍤
+        </div>
+        <button onclick="initGame()">COOK</button>
+    </div>
+
+    <!-- ═══ TRANSITION SCREEN ═══ -->
+    <div id="transition-screen" class="screen" style="display:none">
+        <div id="transition-text"
+            style="font-size:clamp(20px,5vw,28px);text-align:center;line-height:2;max-width:400px"></div>
+    </div>
+
+    <!-- ═══ GAME OVER SCREEN ═══ -->
+    <div id="gameover-screen" class="screen" style="display:none">
+        <h1 id="go-title">BURNT</h1>
+        <div class="score-display" id="go-stats"></div>
+        <div id="go-flavor" style="font-size:14px;opacity:.5;margin-top:12px;font-style:italic"></div>
+        <button onclick="restartGame()">COOK AGAIN</button>
+    </div>
+
+    <!-- ═══ VICTORY SCREEN ═══ -->
+    <div id="victory-screen" class="screen" style="display:none">
+        <h1>ORDER UP! 🍤</h1>
+        <div class="score-display" id="vic-stats"></div>
+        <div style="font-size:14px;opacity:.5;margin-top:12px;font-style:italic">The shrimp fried the rice... and the
+            chef.</div>
+        <button onclick="restartGame()">COOK AGAIN</button>
+    </div>
+
+    <!-- ═══ STAGE ANNOUNCEMENT ═══ -->
+    <div id="stage-announce">
+        <h2 id="sa-title"></h2>
+        <div class="stage-sub" id="sa-sub"></div>
+    </div>
+
+    <!-- ═══ HUD ═══ -->
+    <div id="hud">
+        <div class="hud-block">
+            <div class="label" id="hud-left-label">MSG</div>
+            <div class="value" id="hud-left-value" style="color:#ffd700">0 / 5</div>
+        </div>
+        <div class="hud-block" style="text-align:right">
+            <div class="label">TIME</div>
+            <div class="value" id="hud-time">0:00</div>
+        </div>
+    </div>
+
+    <div id="oil-label" class="bar-label">OIL LEVEL</div>
+    <div id="oil-bar-wrap" class="bar-container">
+        <div id="oil-bar" class="bar-fill"></div>
+    </div>
+    <div id="chef-label" class="bar-label">CHEF</div>
+    <div id="chef-bar-wrap" class="bar-container">
+        <div id="chef-bar" class="bar-fill"></div>
+    </div>
+
+    <canvas id="game-canvas"></canvas>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════
+        //  SHRIMP FRIED RICE — v0.2.0 — TWO-STAGE PROTOTYPE
+        //  GDC Alt. Ctrl. Submission Build
+        //  Hardware target: Wok + IMU (Arduino/ESP32) + Piezo
+        //  This build: Phone tilt + shake (WebGL/browser sensors)
+        // ═══════════════════════════════════════════════════════════════
+
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+
+        /* ═══ CONFIG ═══ */
+        const CFG = {
+            // Physics
+            GRAVITY: 0.8,
+            BASE_DRAG: 0.88,
+            BOUNCE: 0.3,
+            TOSS_THRESHOLD: 15,
+            SWAT_THRESHOLD: 22,
+            TOSS_FORCE: 15,
+            AIR_DURATION: 1.0,
+
+            // Oil
+            OIL_MAX: 100,
+            OIL_DRAIN_BASE: 0.4,
+            OIL_DRAIN_MOVE: 0.015,
+            OIL_REFILL: 20,
+            BURN_MAX: 100,
+            BURN_RATE_GROWTH: 55,
+            BURN_RATE_COOL: 20,
+
+            // Stage 1
+            MSG_TO_WIN: 5,
+            MSG_SPAWN_INTERVAL: 5,
+            MSG_RADIUS: 16,
+            OIL_SPAWN_INTERVAL: 4,
+            OIL_RADIUS: 16,
+
+            // Obstacles
+            SPATULA_INTERVAL_MIN: 4,
+            SPATULA_INTERVAL_MAX: 7,
+            PEPPER_INTERVAL_MIN: 3,
+            PEPPER_INTERVAL_MAX: 5,
+            OILPOP_INTERVAL_MIN: 2.5,
+            OILPOP_INTERVAL_MAX: 4,
+            SPATULA_DAMAGE: 15,
+            PEPPER_DAMAGE: 10,
+            OILPOP_DAMAGE: 8,
+
+            // Stage 2 — Chef
+            CHEF_MAX_HP: 4,
+            SWAT_DAMAGE: 1,
+            RAM_DAMAGE: 0.5,
+            CHEF_IDLE_MIN: 2.5,
+            CHEF_IDLE_MAX: 4,
+            CHEF_REACH_TIME: 0.8,
+            CHEF_HOLD_TIME: 2.0,
+            CHEF_RECOIL_TIME: 0.5,
+        };
+
+        /* ═══ AUDIO ENGINE (Procedural — no files needed) ═══ */
+        let audioCtx = null;
+        function ensureAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playSound(type) {
+            ensureAudio();
+            const sr = audioCtx.sampleRate;
+            let dur, data;
+
+            switch (type) {
+                case 'slap': {
+                    dur = 0.12;
+                    const buf = audioCtx.createBuffer(1, sr * dur, sr);
+                    data = buf.getChannelData(0);
+                    for (let i = 0; i < data.length; i++) {
+                        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.015));
+                    }
+                    const src = audioCtx.createBufferSource(); src.buffer = buf;
+                    const filt = audioCtx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 600;
+                    const gain = audioCtx.createGain(); gain.gain.value = 0.6;
+                    src.connect(filt).connect(gain).connect(audioCtx.destination); src.start();
+                    break;
+                }
+                case 'collect': {
+                    const osc = audioCtx.createOscillator();
+                    const g = audioCtx.createGain();
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(1320, audioCtx.currentTime + 0.08);
+                    g.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+                    osc.connect(g).connect(audioCtx.destination);
+                    osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+                    break;
+                }
+                case 'whoosh': {
+                    dur = 0.18;
+                    const buf = audioCtx.createBuffer(1, sr * dur, sr);
+                    data = buf.getChannelData(0);
+                    for (let i = 0; i < data.length; i++) {
+                        const env = Math.sin((i / data.length) * Math.PI);
+                        data[i] = (Math.random() * 2 - 1) * env * 0.3;
+                    }
+                    const src = audioCtx.createBufferSource(); src.buffer = buf;
+                    const filt = audioCtx.createBiquadFilter(); filt.type = 'bandpass'; filt.frequency.value = 1200; filt.Q.value = 2;
+                    src.connect(filt).connect(audioCtx.destination); src.start();
+                    break;
+                }
+                case 'pop': {
+                    const osc = audioCtx.createOscillator();
+                    const g = audioCtx.createGain();
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.1);
+                    g.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+                    osc.connect(g).connect(audioCtx.destination);
+                    osc.start(); osc.stop(audioCtx.currentTime + 0.12);
+                    break;
+                }
+                case 'hit': {
+                    dur = 0.08;
+                    const buf = audioCtx.createBuffer(1, sr * dur, sr);
+                    data = buf.getChannelData(0);
+                    for (let i = 0; i < data.length; i++) {
+                        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.01)) * 0.4;
+                    }
+                    const src = audioCtx.createBufferSource(); src.buffer = buf;
+                    src.connect(audioCtx.destination); src.start();
+                    break;
+                }
+                case 'victory': {
+                    [0, 0.12, 0.24, 0.4].forEach((t, i) => {
+                        const osc = audioCtx.createOscillator();
+                        const g = audioCtx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.value = [523, 659, 784, 1047][i];
+                        g.gain.setValueAtTime(0.15, audioCtx.currentTime + t);
+                        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + t + 0.3);
+                        osc.connect(g).connect(audioCtx.destination);
+                        osc.start(audioCtx.currentTime + t);
+                        osc.stop(audioCtx.currentTime + t + 0.35);
+                    });
+                    break;
+                }
+            }
+        }
+
+        /* ═══ WOK GEOMETRY ═══ */
+        const WOK = {
+            size: 500,
+            cx() { return this.size / 2; },
+            cy() { return this.size / 2; },
+            radius() { return this.size * 0.46; },
+            innerRadius() { return this.size * 0.15; },
+        };
+
+        /* ═══ GAME STATE ═══ */
+        const STAGE = { TITLE: 0, S1: 1, TRANSITION: 2, S2: 3, GAMEOVER: 4, VICTORY: 5 };
+        let stage = STAGE.TITLE;
+        let gameRunning = false;
+        let gameTime = 0;
+        let timeScale = 1;
+
+        // Shrimp
+        let shrimp = { x: 0, y: 0, vx: 0, vy: 0, radius: 14, airborne: false, airTime: 0, scale: 1, angle: 0, wobble: 0 };
+
+        // Oil / Burn
+        let oilLevel = CFG.OIL_MAX;
+        let burnMeter = 0;
+        let currentDrag = CFG.BASE_DRAG;
+
+        // Entities
+        let oilItems = [];
+        let msgItems = [];
+        let msgCollected = 0;
+        let obstacles = [];
+        let particles = [];
+
+        // Spawn timers
+        let oilSpawnTimer = 0;
+        let msgSpawnTimer = 0;
+        let spatulaTimer = 0;
+        let pepperTimer = 0;
+        let oilpopTimer = 0;
+
+        // Chef (Stage 2)
+        let chef = {
+            hp: CFG.CHEF_MAX_HP,
+            angle: 0,
+            reachProgress: 0,
+            state: 'idle', // idle | reaching | holding | recoiling
+            stateTimer: 3,
+            handX: 0, handY: 0,
+            active: false,
+            invuln: 0,
+        };
+
+        // Effects
+        let screenShake = { x: 0, y: 0, intensity: 0 };
+        let screenFlash = 0;
+        let hitFlash = 0;
+        let hitCooldown = 0;
+
+        // Input
+        let tiltX = 0, tiltY = 0;
+        let hasDeviceOrientation = false;
+        let lastAccel = { x: 0, y: 0, z: 0 };
+        let accelMagnitude = 0;
+        let keys = {};
+
+        /* ═══ UI HELPERS ═══ */
+        const $ = id => document.getElementById(id);
+
+        function hideAllScreens() {
+            ['title-screen', 'transition-screen', 'gameover-screen', 'victory-screen'].forEach(id => $(id).style.display = 'none');
+            $('hud').style.display = 'none';
+            $('oil-label').style.display = 'none';
+            $('oil-bar-wrap').style.display = 'none';
+            $('chef-label').style.display = 'none';
+            $('chef-bar-wrap').style.display = 'none';
+            $('stage-announce').style.opacity = '0';
+            document.body.classList.remove('burn-pulse');
+        }
+
+        function showScreen(id) { hideAllScreens(); if (id) $(id).style.display = 'flex'; }
+
+        function showHUD() {
+            $('hud').style.display = 'flex';
+            $('oil-label').style.display = 'block';
+            $('oil-bar-wrap').style.display = 'block';
+        }
+
+        function showChefBar() {
+            $('chef-label').style.display = 'block';
+            $('chef-bar-wrap').style.display = 'block';
+        }
+
+        function announce(title, sub, duration = 2000) {
+            $('sa-title').textContent = title;
+            $('sa-sub').textContent = sub;
+            $('stage-announce').style.opacity = '1';
+            setTimeout(() => { $('stage-announce').style.opacity = '0'; }, duration);
+        }
+
+        function spawnPopup(worldX, worldY, text, color = '#ffd700') {
+            const popup = document.createElement('div');
+            popup.className = 'msg-popup';
+            popup.style.color = color;
+            popup.innerHTML = text;
+            const rect = canvas.getBoundingClientRect();
+            const ratio = rect.width / WOK.size;
+            popup.style.left = (rect.left + worldX * ratio) + 'px';
+            popup.style.top = (rect.top + worldY * ratio) + 'px';
+            document.body.appendChild(popup);
+            setTimeout(() => popup.remove(), 800);
+        }
+
+        /* ═══ CANVAS RESIZE ═══ */
+        function resize() {
+            const maxW = 600;
+            const sizeCSS = Math.min(window.innerWidth - 32, window.innerHeight - 140, maxW);
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = sizeCSS * dpr;
+            canvas.height = sizeCSS * dpr;
+            canvas.style.width = sizeCSS + 'px';
+            canvas.style.height = sizeCSS + 'px';
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            WOK.size = sizeCSS;
+            if (shrimp.x === 0) { shrimp.x = WOK.cx(); shrimp.y = WOK.cy(); }
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /* ═══ INPUT HANDLERS ═══ */
+        function setupDeviceOrientation() {
+            window.addEventListener('deviceorientation', e => {
+                if (e.gamma === null || e.beta === null) return;
+                hasDeviceOrientation = true;
+                tiltX = Math.max(-1, Math.min(1, (e.gamma || 0) / 45));
+                tiltY = Math.max(-1, Math.min(1, (e.beta || 0) / 45));
+            });
+        }
+
+        function setupDeviceMotion() {
+            window.addEventListener('devicemotion', e => {
+                const a = e.accelerationIncludingGravity;
+                if (!a) return;
+                const dx = a.x - lastAccel.x, dy = a.y - lastAccel.y, dz = a.z - lastAccel.z;
+                accelMagnitude = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                lastAccel = { x: a.x, y: a.y, z: a.z };
+
+                if (!gameRunning) return;
+
+                if (accelMagnitude > CFG.SWAT_THRESHOLD && stage === STAGE.S2) {
+                    attemptSwat();
+                } else if (accelMagnitude > CFG.TOSS_THRESHOLD && !shrimp.airborne) {
+                    tossShrimp();
+                }
+            });
+        }
+
+        // Mouse / Touch (desktop testing + mobile fallback)
+        window.addEventListener('mousemove', e => {
+            if (hasDeviceOrientation) return;
+            const rect = canvas.getBoundingClientRect();
+            tiltX = Math.max(-1, Math.min(1, (e.clientX - rect.left - rect.width / 2) / (rect.width * 0.4)));
+            tiltY = Math.max(-1, Math.min(1, (e.clientY - rect.top - rect.height / 2) / (rect.height * 0.4)));
+        });
+
+        // Touch toss & swat
+        canvas.addEventListener('touchstart', e => {
+            e.preventDefault();
+            if (!gameRunning) return;
+            if (stage === STAGE.S2 && chef.state === 'holding') { attemptSwat(); return; }
+            if (!shrimp.airborne) tossShrimp();
+        }, { passive: false });
+
+        window.addEventListener('mousedown', () => {
+            if (!gameRunning) return;
+            if (stage === STAGE.S2 && chef.state === 'holding') { attemptSwat(); return; }
+            if (!shrimp.airborne) tossShrimp();
+        });
+
+        // Keyboard
+        window.addEventListener('keydown', e => {
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+            keys[e.code] = true;
+            if (e.code === 'Space' && gameRunning) {
+                if (stage === STAGE.S2 && chef.state === 'holding') attemptSwat();
+                else if (!shrimp.airborne) tossShrimp();
+            }
+            if (e.code === 'Space' && (stage === STAGE.GAMEOVER || stage === STAGE.VICTORY)) restartGame();
+        });
+        window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+        // Restart from game over / victory via tap
+        $('gameover-screen').addEventListener('touchstart', () => restartGame());
+        $('victory-screen').addEventListener('touchstart', () => restartGame());
+
+        /* ═══ GAME FLOW ═══ */
+        function initGame() {
+            ensureAudio();
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission().then(r => {
+                    if (r === 'granted') { setupDeviceOrientation(); setupDeviceMotion(); }
+                }).catch(console.error);
+            } else {
+                setupDeviceOrientation();
+                setupDeviceMotion();
+            }
+            startGame();
+        }
+
+        function startGame() {
+            resetAll();
+            stage = STAGE.S1;
+            gameRunning = true;
+            hideAllScreens();
+            showHUD();
+            announce('STAGE 1', 'SURVIVE THE WOK');
+            spawnOil();
+        }
+
+        function restartGame() {
+            startGame();
+        }
+
+        function resetAll() {
+            resize();
+            shrimp.x = WOK.cx(); shrimp.y = WOK.cy();
+            shrimp.vx = 0; shrimp.vy = 0; shrimp.airborne = false; shrimp.airTime = 0;
+            shrimp.scale = 1; shrimp.angle = 0; shrimp.wobble = 0;
+            oilLevel = CFG.OIL_MAX; burnMeter = 0;
+            oilItems = []; msgItems = []; obstacles = []; particles = [];
+            msgCollected = 0; gameTime = 0; timeScale = 1;
+            oilSpawnTimer = 0; msgSpawnTimer = 0;
+            spatulaTimer = randRange(2, 4);
+            pepperTimer = randRange(3, 5);
+            oilpopTimer = randRange(2, 3);
+            chef.hp = CFG.CHEF_MAX_HP; chef.state = 'idle'; chef.stateTimer = 3;
+            chef.active = false; chef.reachProgress = 0; chef.invuln = 0;
+            chef.angle = Math.random() * Math.PI * 2;
+            screenShake = { x: 0, y: 0, intensity: 0 };
+            screenFlash = 0; hitFlash = 0; hitCooldown = 0;
+            tiltX = 0; tiltY = 0;
+            document.body.classList.remove('burn-pulse');
+        }
+
+        function triggerGameOver() {
+            gameRunning = false;
+            stage = STAGE.GAMEOVER;
+            const stageText = stage === STAGE.S2 ? 'Stage 2' : 'Stage 1';
+            $('go-title').textContent = burnMeter >= CFG.BURN_MAX ? 'BURNT!' : 'GAME OVER';
+            $('go-stats').innerHTML = `MSG: <span>${msgCollected}</span> / ${CFG.MSG_TO_WIN}<br>Time: <span>${fmtTime(gameTime)}</span>`;
+            $('go-flavor').textContent = burnMeter >= CFG.BURN_MAX ? 'The oil ran dry... crispy shrimp.' : 'Better luck next time.';
+            showScreen('gameover-screen');
+        }
+
+        function triggerVictory() {
+            gameRunning = false;
+            stage = STAGE.VICTORY;
+            playSound('victory');
+            $('vic-stats').innerHTML = `Time: <span>${fmtTime(gameTime)}</span><br>The shrimp became the chef.`;
+            showScreen('victory-screen');
+        }
+
+        function startTransition() {
+            stage = STAGE.TRANSITION;
+            obstacles = [];
+            const el = $('transition-text');
+            showScreen('transition-screen');
+
+            el.innerHTML = '<span style="color:#f7c948;font-size:32px">✨</span><br>The MSG... it\'s changing you...';
+            setTimeout(() => {
+                el.innerHTML = '<span style="font-size:40px">🍤</span><br><span style="color:#f7c948;font-weight:800">NOW YOU\'RE THE CHEF.</span>';
+            }, 2500);
+            setTimeout(() => {
+                hideAllScreens();
+                showHUD();
+                showChefBar();
+                stage = STAGE.S2;
+                chef.active = true;
+                chef.state = 'idle';
+                chef.stateTimer = 2;
+                // Reduce obstacle frequency in stage 2
+                spatulaTimer = 6;
+                pepperTimer = 5;
+                oilpopTimer = 4;
+                announce('STAGE 2', 'COOK THE CHEF');
+                // Update HUD labels
+                $('hud-left-label').textContent = 'CHEF HP';
+            }, 5000);
+        }
+
+        /* ═══ ENTITY SPAWNING ═══ */
+        function spawnOil() {
+            const a = Math.random() * Math.PI * 2;
+            const d = Math.random() * (WOK.radius() - CFG.OIL_RADIUS - 30) * 0.75;
+            oilItems.push({ x: WOK.cx() + Math.cos(a) * d, y: WOK.cy() + Math.sin(a) * d, radius: CFG.OIL_RADIUS, bob: Math.random() * Math.PI * 2, collected: false });
+        }
+
+        function spawnMSG() {
+            const a = Math.random() * Math.PI * 2;
+            const d = Math.random() * (WOK.radius() - CFG.MSG_RADIUS - 30) * 0.7;
+            msgItems.push({ x: WOK.cx() + Math.cos(a) * d, y: WOK.cy() + Math.sin(a) * d, radius: CFG.MSG_RADIUS, bob: Math.random() * Math.PI * 2, collected: false });
+        }
+
+        function spawnSpatula() {
+            obstacles.push({
+                type: 'spatula', angle: Math.random() * Math.PI * 2,
+                progress: 0, speed: 0.7 + Math.random() * 0.3,
+                telegraphTime: 1.2, timer: 0, active: false, done: false, hitOnce: false
+            });
+        }
+
+        function spawnPepper() {
+            const a = Math.random() * Math.PI * 2;
+            const d = Math.random() * WOK.radius() * 0.65;
+            obstacles.push({
+                type: 'pepper', x: WOK.cx() + Math.cos(a) * d, y: WOK.cy() + Math.sin(a) * d,
+                maxRadius: 35 + Math.random() * 15, timer: 0,
+                phase: 'warning', warningDur: 1.0, activeDur: 0.8, done: false, hitOnce: false
+            });
+        }
+
+        function spawnOilPop() {
+            const a = Math.random() * Math.PI * 2;
+            const d = Math.random() * WOK.radius() * 0.55;
+            obstacles.push({
+                type: 'oilpop', x: WOK.cx() + Math.cos(a) * d, y: WOK.cy() + Math.sin(a) * d,
+                maxRadius: 25 + Math.random() * 10, timer: 0,
+                phase: 'bubble', bubbleDur: 0.6, popDur: 0.4, done: false, hitOnce: false
+            });
+        }
+
+        function spawnParticle(x, y, color, speed, size) {
+            particles.push({
+                x, y, vx: (Math.random() - .5) * speed, vy: (Math.random() - .5) * speed,
+                life: 0.4 + Math.random() * 0.4, maxLife: 0.8, color, size: size + Math.random() * size
+            });
+        }
+
+        /* ═══ SHRIMP ACTIONS ═══ */
+        function tossShrimp() {
+            if (shrimp.airborne) return;
+            shrimp.airborne = true;
+            shrimp.airTime = CFG.AIR_DURATION;
+            shrimp.scale = 1.6;
+            playSound('whoosh');
+            for (let i = 0; i < 10; i++) spawnParticle(shrimp.x, shrimp.y, '#fff', 3, 5);
+        }
+
+        function hitShrimp(damage) {
+            if (hitCooldown > 0 || shrimp.airborne) return;
+            hitCooldown = 0.5;
+            oilLevel -= damage;
+            addShake(8);
+            hitFlash = 0.15;
+            playSound('hit');
+            if (navigator.vibrate) navigator.vibrate(50);
+            for (let i = 0; i < 6; i++) spawnParticle(shrimp.x, shrimp.y, '#ff3333', 5, 3);
+        }
+
+        function attemptSwat() {
+            if (stage !== STAGE.S2 || !chef.active) return;
+            if (chef.state !== 'holding' && chef.state !== 'reaching') return;
+            if (chef.invuln > 0) return;
+
+            chef.hp -= CFG.SWAT_DAMAGE;
+            chef.invuln = 0.5;
+            chef.state = 'recoiling';
+            chef.stateTimer = CFG.CHEF_RECOIL_TIME;
+
+            addShake(25);
+            screenFlash = 0.4;
+            playSound('slap');
+            if (navigator.vibrate) navigator.vibrate([100, 30, 60]);
+
+            // Slow-mo
+            timeScale = 0.15;
+            setTimeout(() => { timeScale = 1; }, 250);
+
+            spawnPopup(chef.handX, chef.handY, '💥 SWAT!', '#ff4444');
+            for (let i = 0; i < 25; i++) spawnParticle(chef.handX, chef.handY, '#ff6666', 12, 5);
+
+            if (chef.hp <= 0) {
+                chef.active = false;
+                setTimeout(triggerVictory, 600);
+            }
+        }
+
+        /* ═══ EFFECTS ═══ */
+        function addShake(intensity) { screenShake.intensity = Math.max(screenShake.intensity, intensity); }
+
+        /* ═══ UTILITIES ═══ */
+        function randRange(a, b) { return a + Math.random() * (b - a); }
+        function lerp(a, b, t) { return a + (b - a) * t; }
+        function fmtTime(t) { return `${Math.floor(t / 60)}:${Math.floor(t % 60).toString().padStart(2, '0')}`; }
+        function dist(x1, y1, x2, y2) { return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2); }
+        function ptSegDist(px, py, ax, ay, bx, by) {
+            const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
+            if (len2 === 0) return dist(px, py, ax, ay);
+            let t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+            return dist(px, py, ax + t * dx, ay + t * dy);
+        }
+
+        /* ═══ OBSTACLE UPDATE ═══ */
+        function updateObstacles(dt) {
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const o = obstacles[i];
+                o.timer += dt;
+
+                switch (o.type) {
+                    case 'spatula': {
+                        if (o.timer < o.telegraphTime) break;
+                        if (!o.active) { o.active = true; o.timer = 0; break; }
+                        o.progress += o.speed * dt;
+                        if (o.progress >= 1) { o.done = true; break; }
+                        // Collision: line from center to rim at sweep angle
+                        if (!o.hitOnce && !shrimp.airborne) {
+                            const sweepAngle = o.angle + o.progress * Math.PI;
+                            const cx = WOK.cx(), cy = WOK.cy(), r = WOK.radius() * 0.92;
+                            const ex = cx + Math.cos(sweepAngle) * r, ey = cy + Math.sin(sweepAngle) * r;
+                            if (ptSegDist(shrimp.x, shrimp.y, cx, cy, ex, ey) < shrimp.radius + 12) {
+                                hitShrimp(CFG.SPATULA_DAMAGE);
+                                o.hitOnce = true;
+                                // Knockback perpendicular to spatula
+                                const ka = sweepAngle + Math.PI / 2;
+                                shrimp.vx += Math.cos(ka) * 6;
+                                shrimp.vy += Math.sin(ka) * 6;
+                            }
+                        }
+                        break;
+                    }
+                    case 'pepper': {
+                        if (o.phase === 'warning' && o.timer >= o.warningDur) { o.phase = 'active'; o.timer = 0; addShake(3); playSound('pop'); }
+                        if (o.phase === 'active') {
+                            if (o.timer >= o.activeDur) { o.done = true; break; }
+                            if (!o.hitOnce && !shrimp.airborne && dist(shrimp.x, shrimp.y, o.x, o.y) < shrimp.radius + o.maxRadius) {
+                                hitShrimp(CFG.PEPPER_DAMAGE);
+                                o.hitOnce = true;
+                            }
+                        }
+                        break;
+                    }
+                    case 'oilpop': {
+                        if (o.phase === 'bubble' && o.timer >= o.bubbleDur) { o.phase = 'pop'; o.timer = 0; playSound('pop'); }
+                        if (o.phase === 'pop') {
+                            const r = (o.timer / o.popDur) * o.maxRadius;
+                            if (o.timer >= o.popDur) { o.done = true; break; }
+                            if (!o.hitOnce && !shrimp.airborne && dist(shrimp.x, shrimp.y, o.x, o.y) < shrimp.radius + r) {
+                                hitShrimp(CFG.OILPOP_DAMAGE);
+                                o.hitOnce = true;
+                            }
+                        }
+                        break;
+                    }
+                }
+                if (o.done) obstacles.splice(i, 1);
+            }
+        }
+
+        /* ═══ CHEF AI (Stage 2) ═══ */
+        function updateChef(dt) {
+            if (!chef.active) return;
+            chef.invuln = Math.max(0, chef.invuln - dt);
+            chef.stateTimer -= dt;
+
+            const rimDist = WOK.radius() + 30;
+            const targetDist = WOK.radius() * 0.35;
+
+            switch (chef.state) {
+                case 'idle':
+                    chef.angle += 0.4 * dt;
+                    chef.reachProgress = 0;
+                    if (chef.stateTimer <= 0) {
+                        chef.state = 'reaching';
+                        chef.stateTimer = CFG.CHEF_REACH_TIME;
+                        chef.reachProgress = 0;
+                    }
+                    break;
+                case 'reaching':
+                    chef.reachProgress = 1 - (chef.stateTimer / CFG.CHEF_REACH_TIME);
+                    if (chef.stateTimer <= 0) {
+                        chef.state = 'holding';
+                        chef.stateTimer = CFG.CHEF_HOLD_TIME;
+                        chef.reachProgress = 1;
+                    }
+                    break;
+                case 'holding':
+                    chef.reachProgress = 1;
+                    // Airborne ram collision
+                    if (shrimp.airborne && chef.invuln <= 0) {
+                        if (dist(shrimp.x, shrimp.y, chef.handX, chef.handY) < shrimp.radius * shrimp.scale + 18) {
+                            chef.hp -= CFG.RAM_DAMAGE;
+                            chef.invuln = 0.5;
+                            addShake(12);
+                            playSound('hit');
+                            spawnPopup(chef.handX, chef.handY, '💢 RAM!', '#ffaa33');
+                            for (let i = 0; i < 12; i++) spawnParticle(chef.handX, chef.handY, '#ffaa33', 8, 4);
+                            if (chef.hp <= 0) { chef.active = false; setTimeout(triggerVictory, 600); }
+                        }
+                    }
+                    if (chef.stateTimer <= 0) {
+                        chef.state = 'recoiling';
+                        chef.stateTimer = CFG.CHEF_RECOIL_TIME;
+                    }
+                    break;
+                case 'recoiling':
+                    chef.reachProgress = chef.stateTimer / CFG.CHEF_RECOIL_TIME;
+                    if (chef.stateTimer <= 0) {
+                        chef.state = 'idle';
+                        chef.stateTimer = randRange(CFG.CHEF_IDLE_MIN, CFG.CHEF_IDLE_MAX);
+                        chef.angle += randRange(Math.PI * 0.3, Math.PI * 0.7) * (Math.random() > 0.5 ? 1 : -1);
+                    }
+                    break;
+            }
+
+            // Cache hand position
+            const handDist = lerp(rimDist, targetDist, chef.reachProgress);
+            chef.handX = WOK.cx() + Math.cos(chef.angle) * handDist;
+            chef.handY = WOK.cy() + Math.sin(chef.angle) * handDist;
+        }
+
+        /* ═══ CORE UPDATE ═══ */
+        let lastTime = performance.now();
+
+        function update() {
+            const now = performance.now();
+            const rawDt = Math.min((now - lastTime) / 1000, 0.05);
+            lastTime = now;
+            requestAnimationFrame(update);
+
+            if (!gameRunning || stage === STAGE.TITLE || stage === STAGE.TRANSITION) return;
+
+            const dt = rawDt * timeScale;
+            gameTime += dt;
+            hitCooldown = Math.max(0, hitCooldown - dt);
+
+            // Keyboard tilt override
+            if (!hasDeviceOrientation && (keys['ArrowLeft'] || keys['ArrowRight'] || keys['ArrowUp'] || keys['ArrowDown'] || keys['KeyW'] || keys['KeyA'] || keys['KeyS'] || keys['KeyD'])) {
+                tiltX = 0; tiltY = 0;
+                if (keys['ArrowLeft'] || keys['KeyA']) tiltX = -0.8;
+                if (keys['ArrowRight'] || keys['KeyD']) tiltX = 0.8;
+                if (keys['ArrowUp'] || keys['KeyW']) tiltY = -0.8;
+                if (keys['ArrowDown'] || keys['KeyS']) tiltY = 0.8;
+            }
+
+            // --- Shrimp physics ---
+            if (!shrimp.airborne) {
+                currentDrag = 0.75 + (0.13 * (oilLevel / CFG.OIL_MAX));
+                shrimp.vx += tiltX * CFG.GRAVITY * 60 * dt;
+                shrimp.vy += tiltY * CFG.GRAVITY * 60 * dt;
+                if (Math.abs(shrimp.vx) > 0.1 || Math.abs(shrimp.vy) > 0.1) shrimp.angle = Math.atan2(shrimp.vy, shrimp.vx);
+                const speed = Math.sqrt(shrimp.vx ** 2 + shrimp.vy ** 2);
+                shrimp.wobble = Math.sin(gameTime * 15) * Math.min(speed * 0.1, 0.5);
+                shrimp.vx *= currentDrag; shrimp.vy *= currentDrag;
+                shrimp.x += shrimp.vx; shrimp.y += shrimp.vy;
+
+                // Wok boundary
+                const dx = shrimp.x - WOK.cx(), dy = shrimp.y - WOK.cy();
+                const d = Math.sqrt(dx * dx + dy * dy);
+                const maxD = WOK.radius() - shrimp.radius;
+                if (d > maxD) {
+                    const nx = dx / d, ny = dy / d;
+                    shrimp.x = WOK.cx() + nx * maxD; shrimp.y = WOK.cy() + ny * maxD;
+                    const dot = shrimp.vx * nx + shrimp.vy * ny;
+                    shrimp.vx -= 2 * dot * nx * (1 - CFG.BOUNCE);
+                    shrimp.vy -= 2 * dot * ny * (1 - CFG.BOUNCE);
+                    spawnParticle(shrimp.x, shrimp.y, '#ffaa33', 3, 3);
+                }
+
+                // Oil drain
+                let drain = CFG.OIL_DRAIN_BASE;
+                if (speed > 1) drain += speed * CFG.OIL_DRAIN_MOVE;
+                if (oilLevel > 0) { oilLevel -= drain * dt; burnMeter = Math.max(0, burnMeter - CFG.BURN_RATE_COOL * dt); }
+                else { burnMeter += CFG.BURN_RATE_GROWTH * dt; }
+            } else {
+                // Airborne
+                shrimp.airTime -= dt;
+                const prog = 1 - (shrimp.airTime / CFG.AIR_DURATION);
+                shrimp.scale = 1 + Math.sin(prog * Math.PI) * 1.5;
+                shrimp.vx += tiltX * CFG.GRAVITY * 0.1;
+                shrimp.vy += tiltY * CFG.GRAVITY * 0.1;
+                shrimp.x += shrimp.vx; shrimp.y += shrimp.vy;
+                // Clamp to wok
+                const dx = shrimp.x - WOK.cx(), dy = shrimp.y - WOK.cy(), d = Math.sqrt(dx * dx + dy * dy);
+                if (d > WOK.radius() - shrimp.radius) {
+                    shrimp.x = WOK.cx() + (dx / d) * (WOK.radius() - shrimp.radius);
+                    shrimp.y = WOK.cy() + (dy / d) * (WOK.radius() - shrimp.radius);
+                }
+                // Slower drain in air
+                if (oilLevel > 0) { oilLevel -= CFG.OIL_DRAIN_BASE * 0.4 * dt; burnMeter = Math.max(0, burnMeter - CFG.BURN_RATE_COOL * dt); }
+                else { burnMeter += CFG.BURN_RATE_GROWTH * dt; }
+
+                if (shrimp.airTime <= 0) { shrimp.airborne = false; shrimp.scale = 1; for (let i = 0; i < 8; i++) spawnParticle(shrimp.x, shrimp.y, '#ffd700', 6, 4); }
+            }
+
+            oilLevel = Math.max(0, Math.min(CFG.OIL_MAX, oilLevel));
+            burnMeter = Math.max(0, Math.min(CFG.BURN_MAX, burnMeter));
+            if (burnMeter >= CFG.BURN_MAX) { triggerGameOver(); return; }
+
+            // --- Collectibles ---
+            // Oil drops
+            for (let i = oilItems.length - 1; i >= 0; i--) {
+                const m = oilItems[i];
+                if (m.collected) continue;
+                const hitR = (shrimp.radius * shrimp.scale) + m.radius;
+                if (shrimp.airborne && dist(shrimp.x, shrimp.y, m.x, m.y) < hitR) {
+                    m.collected = true;
+                    oilLevel = Math.min(CFG.OIL_MAX, oilLevel + CFG.OIL_REFILL);
+                    playSound('collect');
+                    spawnPopup(m.x, m.y, '+OIL', '#ffd700');
+                    for (let j = 0; j < 10; j++) spawnParticle(m.x, m.y, '#ffd700', 7, 4);
+                    oilItems.splice(i, 1);
+                }
+            }
+
+            // MSG crystals (Stage 1 only)
+            if (stage === STAGE.S1) {
+                for (let i = msgItems.length - 1; i >= 0; i--) {
+                    const m = msgItems[i];
+                    if (m.collected) continue;
+                    const hitR = (shrimp.radius * shrimp.scale) + m.radius;
+                    if (shrimp.airborne && dist(shrimp.x, shrimp.y, m.x, m.y) < hitR) {
+                        m.collected = true;
+                        msgCollected++;
+                        playSound('collect');
+                        addShake(5);
+                        spawnPopup(m.x, m.y, `MSG ${msgCollected}/${CFG.MSG_TO_WIN}`, '#ffffff');
+                        for (let j = 0; j < 15; j++) spawnParticle(m.x, m.y, '#ffffff', 8, 5);
+                        msgItems.splice(i, 1);
+
+                        if (msgCollected >= CFG.MSG_TO_WIN) {
+                            startTransition();
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // --- Obstacle spawning ---
+            spatulaTimer -= dt;
+            pepperTimer -= dt;
+            oilpopTimer -= dt;
+            if (spatulaTimer <= 0) { spawnSpatula(); spatulaTimer = randRange(stage === STAGE.S2 ? 6 : CFG.SPATULA_INTERVAL_MIN, stage === STAGE.S2 ? 9 : CFG.SPATULA_INTERVAL_MAX); }
+            if (pepperTimer <= 0) { spawnPepper(); pepperTimer = randRange(stage === STAGE.S2 ? 5 : CFG.PEPPER_INTERVAL_MIN, stage === STAGE.S2 ? 7 : CFG.PEPPER_INTERVAL_MAX); }
+            if (oilpopTimer <= 0) { spawnOilPop(); oilpopTimer = randRange(stage === STAGE.S2 ? 4 : CFG.OILPOP_INTERVAL_MIN, stage === STAGE.S2 ? 6 : CFG.OILPOP_INTERVAL_MAX); }
+
+            // Oil & MSG spawning
+            oilSpawnTimer += dt;
+            if (oilSpawnTimer >= CFG.OIL_SPAWN_INTERVAL) { oilSpawnTimer = 0; if (oilItems.filter(m => !m.collected).length < 3) spawnOil(); }
+            if (stage === STAGE.S1) {
+                msgSpawnTimer += dt;
+                if (msgSpawnTimer >= CFG.MSG_SPAWN_INTERVAL) { msgSpawnTimer = 0; if (msgItems.filter(m => !m.collected).length < 2) spawnMSG(); }
+            }
+
+            updateObstacles(dt);
+            if (stage === STAGE.S2) updateChef(dt);
+
+            // Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx; p.y += p.vy; p.life -= dt;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            // Screen shake decay
+            if (screenShake.intensity > 0) {
+                screenShake.x = (Math.random() - .5) * screenShake.intensity;
+                screenShake.y = (Math.random() - .5) * screenShake.intensity;
+                screenShake.intensity *= 0.85;
+                if (screenShake.intensity < 0.5) screenShake.intensity = 0;
+            }
+            if (screenFlash > 0) screenFlash -= rawDt * 3;
+
+            updateHUD();
+            draw();
+        }
+
+        /* ═══ HUD ═══ */
+        function updateHUD() {
+            if (stage === STAGE.S1) {
+                $('hud-left-label').textContent = 'MSG';
+                $('hud-left-value').textContent = `${msgCollected} / ${CFG.MSG_TO_WIN}`;
+            } else if (stage === STAGE.S2) {
+                $('hud-left-label').textContent = 'CHEF HP';
+                $('hud-left-value').textContent = `${Math.ceil(chef.hp)} / ${CFG.CHEF_MAX_HP}`;
+                $('chef-bar').style.width = `${(chef.hp / CFG.CHEF_MAX_HP) * 100}%`;
+            }
+            $('hud-time').textContent = fmtTime(gameTime);
+
+            // Oil bar
+            const oilBar = $('oil-bar');
+            const oilLabel = $('oil-label');
+            if (oilLevel > 0) {
+                oilBar.style.width = `${(oilLevel / CFG.OIL_MAX) * 100}%`;
+                oilBar.style.background = oilLevel > 60 ? '#44ff44' : oilLevel > 25 ? '#ffd700' : '#ff4444';
+                oilBar.style.boxShadow = '0 0 10px currentColor';
+                oilLabel.textContent = 'OIL LEVEL';
+                oilLabel.classList.remove('is-burning');
+                document.body.classList.remove('burn-pulse');
+            } else {
+                oilBar.style.width = `${(burnMeter / CFG.BURN_MAX) * 100}%`;
+                oilBar.style.background = 'repeating-linear-gradient(45deg,#f00,#f00 10px,#c00 10px,#c00 20px)';
+                oilBar.style.boxShadow = '0 0 15px #f00';
+                oilLabel.textContent = 'BURNING!';
+                oilLabel.classList.add('is-burning');
+                document.body.classList.add('burn-pulse');
+            }
+        }
+
+        /* ═══ RENDERING ═══ */
+        function draw() {
+            const cx = WOK.cx(), cy = WOK.cy(), r = WOK.radius();
+
+            ctx.fillStyle = '#0a0a10';
+            ctx.fillRect(0, 0, WOK.size, WOK.size);
+
+            ctx.save();
+            ctx.translate(screenShake.x, screenShake.y);
+
+            // --- Wok body ---
+            const wokGrad = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r);
+            wokGrad.addColorStop(0, '#3e3e4a');
+            wokGrad.addColorStop(0.5, '#2a2a30');
+            wokGrad.addColorStop(1, '#15151a');
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fillStyle = wokGrad; ctx.fill();
+
+            // Metal texture
+            ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 1;
+            for (let i = 0; i < r; i += 8) { ctx.beginPath(); ctx.arc(cx, cy, i, 0, Math.PI * 2); ctx.stroke(); }
+
+            // Heat zone
+            const heatIntensity = 0.15 + ((CFG.OIL_MAX - oilLevel) / CFG.OIL_MAX) * 0.4;
+            const heatGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, WOK.innerRadius() * 2);
+            heatGrad.addColorStop(0, `rgba(255,80,40,${heatIntensity})`);
+            heatGrad.addColorStop(1, 'rgba(255,60,20,0)');
+            ctx.globalCompositeOperation = 'screen';
+            ctx.beginPath(); ctx.arc(cx, cy, WOK.innerRadius() * 2, 0, Math.PI * 2); ctx.fillStyle = heatGrad; ctx.fill();
+            ctx.globalCompositeOperation = 'source-over';
+
+            // Oil sheen
+            const sx = cx - tiltX * 20, sy = cy - tiltY * 20;
+            const sheenGrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, r * 0.6);
+            sheenGrad.addColorStop(0, 'rgba(255,255,255,0.06)');
+            sheenGrad.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fillStyle = sheenGrad; ctx.fill();
+
+            // --- Draw obstacles ---
+            drawObstacles();
+
+            // --- Oil drops ---
+            for (const m of oilItems) {
+                if (m.collected) continue;
+                const bob = Math.sin(gameTime * 3 + m.bob) * 4;
+                ctx.shadowBlur = 15; ctx.shadowColor = '#ffd700';
+                ctx.fillStyle = '#ffaa00';
+                ctx.beginPath(); ctx.arc(m.x, m.y + bob, m.radius * 0.55, 0, Math.PI * 2); ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = '#fff';
+                ctx.beginPath(); ctx.arc(m.x - m.radius * 0.15, m.y + bob - m.radius * 0.2, m.radius * 0.12, 0, Math.PI * 2); ctx.fill();
+            }
+
+            // --- MSG crystals ---
+            for (const m of msgItems) {
+                if (m.collected) continue;
+                const bob = Math.sin(gameTime * 3.5 + m.bob) * 3;
+                ctx.save();
+                ctx.translate(m.x, m.y + bob);
+                ctx.rotate(gameTime * 2 + m.bob);
+                ctx.shadowBlur = 20; ctx.shadowColor = '#ffffff';
+                // Diamond shape
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.moveTo(0, -m.radius); ctx.lineTo(m.radius * 0.6, 0);
+                ctx.lineTo(0, m.radius); ctx.lineTo(-m.radius * 0.6, 0);
+                ctx.closePath(); ctx.fill();
+                // Inner glow
+                ctx.fillStyle = 'rgba(200,220,255,0.6)';
+                ctx.beginPath();
+                ctx.moveTo(0, -m.radius * 0.5); ctx.lineTo(m.radius * 0.3, 0);
+                ctx.lineTo(0, m.radius * 0.5); ctx.lineTo(-m.radius * 0.3, 0);
+                ctx.closePath(); ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.restore();
+                // "MSG" label
+                ctx.fillStyle = 'rgba(255,255,255,0.7)';
+                ctx.font = '10px Outfit'; ctx.textAlign = 'center';
+                ctx.fillText('MSG', m.x, m.y + bob + m.radius + 12);
+                // Ambient sparkles
+                if (Math.random() > 0.92) spawnParticle(m.x + (Math.random() - .5) * 20, m.y + bob + (Math.random() - .5) * 20, '#fff', 1, 2);
+            }
+
+            // --- Chef (Stage 2) ---
+            if (stage === STAGE.S2 && chef.active) drawChefHand();
+
+            // --- Particles ---
+            for (const p of particles) {
+                ctx.globalAlpha = p.life / p.maxLife;
+                ctx.fillStyle = p.color;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+
+            // --- Shrimp ---
+            drawShrimp();
+
+            ctx.restore(); // end screen shake transform
+
+            // --- Screen flash ---
+            if (screenFlash > 0) {
+                ctx.fillStyle = `rgba(255,255,255,${Math.max(0, screenFlash)})`;
+                ctx.fillRect(0, 0, WOK.size, WOK.size);
+            }
+
+            // --- Hit flash (red vignette) ---
+            if (hitFlash > 0) {
+                const vigGrad = ctx.createRadialGradient(cx, cy, r * 0.4, cx, cy, r);
+                vigGrad.addColorStop(0, 'rgba(255,0,0,0)');
+                vigGrad.addColorStop(1, `rgba(255,0,0,${hitFlash})`);
+                ctx.fillStyle = vigGrad;
+                ctx.fillRect(0, 0, WOK.size, WOK.size);
+                hitFlash -= 0.02;
+            }
+        }
+
+        function drawObstacles() {
+            const cx = WOK.cx(), cy = WOK.cy(), r = WOK.radius();
+
+            for (const o of obstacles) {
+                switch (o.type) {
+                    case 'spatula': {
+                        if (!o.active) {
+                            // Telegraph: pulsing dashed arc
+                            const alpha = (Math.sin(o.timer * 8) + 1) / 2 * 0.4;
+                            ctx.strokeStyle = `rgba(255,100,100,${alpha})`;
+                            ctx.lineWidth = 2; ctx.setLineDash([8, 4]);
+                            ctx.beginPath(); ctx.arc(cx, cy, r * 0.5, o.angle, o.angle + Math.PI); ctx.stroke();
+                            ctx.setLineDash([]);
+                            // Start line
+                            ctx.strokeStyle = `rgba(255,50,50,${alpha})`;
+                            ctx.lineWidth = 3;
+                            const sx = cx + Math.cos(o.angle) * 20, sy = cy + Math.sin(o.angle) * 20;
+                            const ex = cx + Math.cos(o.angle) * r * 0.9, ey = cy + Math.sin(o.angle) * r * 0.9;
+                            ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+                        } else {
+                            const sweepAngle = o.angle + o.progress * Math.PI;
+                            const ex = cx + Math.cos(sweepAngle) * r * 0.92, ey = cy + Math.sin(sweepAngle) * r * 0.92;
+                            // Danger glow
+                            ctx.strokeStyle = 'rgba(255,68,68,0.25)'; ctx.lineWidth = 24;
+                            ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey); ctx.stroke();
+                            // Spatula body
+                            ctx.strokeStyle = '#bbb'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+                            ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey); ctx.stroke();
+                            // Bright tip
+                            ctx.fillStyle = '#ddd'; ctx.beginPath(); ctx.arc(ex, ey, 8, 0, Math.PI * 2); ctx.fill();
+                        }
+                        break;
+                    }
+                    case 'pepper': {
+                        if (o.phase === 'warning') {
+                            const prog = o.timer / o.warningDur;
+                            const pulse = Math.sin(o.timer * 12) * 0.3 + 0.5;
+                            ctx.strokeStyle = `rgba(255,0,0,${pulse})`; ctx.lineWidth = 2; ctx.setLineDash([6, 3]);
+                            ctx.beginPath(); ctx.arc(o.x, o.y, o.maxRadius * prog, 0, Math.PI * 2); ctx.stroke();
+                            ctx.setLineDash([]);
+                            // Crosshair
+                            ctx.strokeStyle = `rgba(255,0,0,${pulse * 0.7})`; ctx.lineWidth = 1;
+                            ctx.beginPath(); ctx.moveTo(o.x - 6, o.y); ctx.lineTo(o.x + 6, o.y); ctx.moveTo(o.x, o.y - 6); ctx.lineTo(o.x, o.y + 6); ctx.stroke();
+                        } else {
+                            const fade = 1 - (o.timer / o.activeDur);
+                            ctx.fillStyle = `rgba(200,30,30,${fade * 0.35})`;
+                            ctx.beginPath(); ctx.arc(o.x, o.y, o.maxRadius, 0, Math.PI * 2); ctx.fill();
+                            // Pepper flake bits
+                            ctx.fillStyle = `rgba(255,80,40,${fade})`;
+                            for (let i = 0; i < 5; i++) {
+                                const a = (i / 5) * Math.PI * 2 + o.timer * 3;
+                                const d = o.maxRadius * 0.5;
+                                ctx.beginPath(); ctx.arc(o.x + Math.cos(a) * d, o.y + Math.sin(a) * d, 3, 0, Math.PI * 2); ctx.fill();
+                            }
+                        }
+                        break;
+                    }
+                    case 'oilpop': {
+                        if (o.phase === 'bubble') {
+                            const bub = (o.timer / o.bubbleDur) * 8;
+                            ctx.fillStyle = 'rgba(255,200,50,0.5)';
+                            ctx.beginPath(); ctx.arc(o.x, o.y, bub, 0, Math.PI * 2); ctx.fill();
+                        } else {
+                            const prog = o.timer / o.popDur;
+                            const rad = prog * o.maxRadius;
+                            const fade = 1 - prog;
+                            ctx.strokeStyle = `rgba(255,180,50,${fade})`; ctx.lineWidth = 3 * fade;
+                            ctx.beginPath(); ctx.arc(o.x, o.y, rad, 0, Math.PI * 2); ctx.stroke();
+                            ctx.fillStyle = `rgba(255,220,100,${fade * 0.25})`;
+                            ctx.beginPath(); ctx.arc(o.x, o.y, rad * 0.6, 0, Math.PI * 2); ctx.fill();
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        function drawChefHand() {
+            const cx = WOK.cx(), cy = WOK.cy();
+            const rimDist = WOK.radius() + 30;
+            const elbowX = cx + Math.cos(chef.angle) * (rimDist + 25);
+            const elbowY = cy + Math.sin(chef.angle) * (rimDist + 25);
+            const hx = chef.handX, hy = chef.handY;
+
+            // Arm (chef sleeve — white)
+            ctx.strokeStyle = '#eee'; ctx.lineWidth = 24; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(elbowX, elbowY); ctx.lineTo(hx, hy); ctx.stroke();
+            ctx.strokeStyle = '#ddd'; ctx.lineWidth = 18;
+            ctx.beginPath(); ctx.moveTo(elbowX, elbowY); ctx.lineTo(hx, hy); ctx.stroke();
+
+            // Hand
+            const hpRatio = chef.hp / CFG.CHEF_MAX_HP;
+            const skin = `rgb(${232 - (1 - hpRatio) * 80}, ${184 - (1 - hpRatio) * 80}, ${152 - (1 - hpRatio) * 60})`;
+            ctx.fillStyle = skin;
+            ctx.beginPath(); ctx.arc(hx, hy, 15, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(hx, hy, 15, 0, Math.PI * 2); ctx.stroke();
+
+            // Chopsticks
+            const chopAngle = chef.angle - Math.PI;
+            for (let i = -1; i <= 1; i += 2) {
+                const ca = chopAngle + i * 0.15;
+                ctx.strokeStyle = '#c4955a'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(hx, hy);
+                ctx.lineTo(hx + Math.cos(ca) * 35, hy + Math.sin(ca) * 35);
+                ctx.stroke();
+            }
+
+            // Swat zone (when holding)
+            if (chef.state === 'holding') {
+                const pulse = Math.sin(gameTime * 8) * 0.2 + 0.7;
+                ctx.strokeStyle = `rgba(255,50,50,${pulse * 0.5})`;
+                ctx.lineWidth = 3; ctx.setLineDash([8, 4]);
+                ctx.beginPath(); ctx.arc(hx, hy, 40, 0, Math.PI * 2); ctx.stroke();
+                ctx.setLineDash([]);
+                // "SWAT!" prompt
+                ctx.fillStyle = `rgba(255,100,100,${pulse})`;
+                ctx.font = 'bold 12px Outfit'; ctx.textAlign = 'center';
+                ctx.fillText('SHAKE!', hx, hy - 50);
+            }
+
+            // Damage flash
+            if (chef.invuln > 0 && Math.sin(chef.invuln * 30) > 0) {
+                ctx.fillStyle = 'rgba(255,50,50,0.5)';
+                ctx.beginPath(); ctx.arc(hx, hy, 20, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+
+        function drawShrimp() {
+            const x = shrimp.x, y = shrimp.y;
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(shrimp.scale, shrimp.scale);
+            if (!shrimp.airborne) ctx.rotate(shrimp.angle);
+
+            // MSG Aura (Stage 2 — powered up)
+            if (stage === STAGE.S2) {
+                ctx.save();
+                ctx.globalAlpha = 0.25 + Math.sin(gameTime * 5) * 0.1;
+                const auraGrad = ctx.createRadialGradient(0, 0, shrimp.radius, 0, 0, shrimp.radius * 2.8);
+                auraGrad.addColorStop(0, 'rgba(255,215,0,0.4)');
+                auraGrad.addColorStop(1, 'rgba(255,215,0,0)');
+                ctx.fillStyle = auraGrad;
+                ctx.beginPath(); ctx.arc(0, 0, shrimp.radius * 2.8, 0, Math.PI * 2); ctx.fill();
+                ctx.globalAlpha = 1;
+                ctx.restore();
+            }
+
+            // Shadow (airborne)
+            if (shrimp.airborne) {
+                ctx.save(); ctx.translate(8, 16); ctx.scale(1, 0.5);
+                ctx.fillStyle = 'rgba(0,0,0,0.35)';
+                ctx.beginPath(); ctx.arc(0, 0, shrimp.radius, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+            }
+
+            // Dynamic color
+            const burnTint = burnMeter / CFG.BURN_MAX;
+            const isS2 = stage === STAGE.S2;
+            const rr = isS2 ? Math.min(255, 255) : Math.min(255, 255 * (0.8 + burnTint * 0.4));
+            const gg = isS2 ? 180 : Math.max(50, 140 * (1 - burnTint));
+            const bb = isS2 ? 80 : Math.max(50, 100 * (1 - burnTint));
+            const bodyColor = `rgb(${rr},${gg},${bb})`;
+
+            // Body segments
+            const segments = 5;
+            for (let i = 0; i < segments; i++) {
+                const offset = Math.sin(gameTime * 20 + i) * (shrimp.airborne ? 2 : shrimp.wobble * 10);
+                const sz = shrimp.radius * (1 - i * 0.15);
+                ctx.fillStyle = bodyColor;
+                ctx.beginPath(); ctx.arc(-i * 6, offset, sz, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 2; ctx.stroke();
+            }
+
+            // Eyes
+            ctx.fillStyle = '#111';
+            ctx.beginPath(); ctx.arc(4, -4, 3, 0, Math.PI * 2); ctx.arc(4, 4, 3, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(5, -5, 1, 0, Math.PI * 2); ctx.arc(5, 3, 1, 0, Math.PI * 2); ctx.fill();
+
+            // Hit flash overlay
+            if (hitCooldown > 0.3) {
+                ctx.fillStyle = 'rgba(255,0,0,0.3)';
+                ctx.beginPath(); ctx.arc(0, 0, shrimp.radius * 1.2, 0, Math.PI * 2); ctx.fill();
+            }
+
+            // Burn smoke
+            if (burnTint > 0.5 && Math.random() > 0.7) spawnParticle(x, y, '#555', 2, 4);
+
+            ctx.restore();
+        }
+
+        /* ═══ INIT ═══ */
+        requestAnimationFrame(update);
+
+        // Fix: Handle game over / victory screen tap-to-restart on mobile
+        $('gameover-screen').addEventListener('click', e => { if (e.target.tagName !== 'BUTTON') restartGame(); });
+        $('victory-screen').addEventListener('click', e => { if (e.target.tagName !== 'BUTTON') restartGame(); });
+    </script>
+</body>
+
+</html>

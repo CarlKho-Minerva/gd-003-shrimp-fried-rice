@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>🍤 Shrimp Fried Rice — GDC Alt. Ctrl. Prototype</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ═══ TITLE SCREEN ═══ -->
+<div id="title-screen" class="screen">
+  <h1>SHRIMP<br>FRIED<br>RICE</h1>
+  <div class="subtitle">GDC Alt. Ctrl. Prototype</div>
+  <div class="controls-info">
+    <strong>Tilt</strong> to slide&ensp;·&ensp;<strong>Shake</strong> to toss<br>
+    Collect <strong>MSG</strong> to transform<br>
+    Then <strong>SWAT</strong> the chef 🍤
+  </div>
+  <button onclick="initGame()">COOK</button>
+  <button class="secondary" onclick="setupDesktopFallback()" style="margin-top:12px">DESKTOP MODE (no sensors)</button>
+</div>
+
+<!-- ═══ CALIBRATION SCREEN ═══ -->
+<div id="calibration-screen" class="screen" style="display:none">
+  <h1 style="font-size:clamp(28px,5vw,40px)">📱 CALIBRATE</h1>
+  <div class="cal-instructions">
+    Hold your phone flat and <strong>flick it upward</strong> 3 times.<br>
+    This sets your personal toss &amp; swat sensitivity.
+  </div>
+  <div class="cal-progress">
+    <div class="cal-dot">1</div>
+    <div class="cal-dot">2</div>
+    <div class="cal-dot">3</div>
+  </div>
+  <div class="cal-hint" id="cal-hint">FLICK UP! (3 left)</div>
+  <button class="secondary" onclick="skipCalibration()" style="margin-top:24px;font-size:12px">Skip (use defaults)</button>
+</div>
+
+<!-- ═══ TRANSITION SCREEN ═══ -->
+<div id="transition-screen" class="screen" style="display:none">
+  <div id="transition-text" style="font-size:clamp(20px,5vw,28px);text-align:center;line-height:2;max-width:400px"></div>
+</div>
+
+<!-- ═══ GAME OVER SCREEN ═══ -->
+<div id="gameover-screen" class="screen" style="display:none">
+  <h1 id="go-title">BURNT</h1>
+  <div class="score-display" id="go-stats"></div>
+  <div id="go-flavor" style="font-size:14px;opacity:.5;margin-top:12px;font-style:italic"></div>
+  <button onclick="restartGame()">COOK AGAIN</button>
+</div>
+
+<!-- ═══ VICTORY SCREEN ═══ -->
+<div id="victory-screen" class="screen" style="display:none">
+  <h1>ORDER UP! 🍤</h1>
+  <div class="score-display" id="vic-stats"></div>
+  <div style="font-size:14px;opacity:.5;margin-top:12px;font-style:italic">The shrimp fried the rice... and the chef.</div>
+  <button onclick="restartGame()">COOK AGAIN</button>
+</div>
+
+<!-- ═══ STAGE ANNOUNCEMENT ═══ -->
+<div id="stage-announce">
+  <h2 id="sa-title"></h2>
+  <div class="stage-sub" id="sa-sub"></div>
+</div>
+
+<!-- ═══ HUD ═══ -->
+<div id="hud">
+  <div class="hud-block">
+    <div class="label" id="hud-left-label">MSG</div>
+    <div class="value" id="hud-left-value" style="color:#ffd700">0 / 5</div>
+  </div>
+  <div class="hud-block" style="text-align:right">
+    <div class="label">TIME</div>
+    <div class="value" id="hud-time">0:00</div>
+  </div>
+</div>
+
+<div id="oil-label" class="bar-label">OIL LEVEL</div>
+<div id="oil-bar-wrap" class="bar-container"><div id="oil-bar" class="bar-fill"></div></div>
+<div id="chef-label" class="bar-label">CHEF</div>
+<div id="chef-bar-wrap" class="bar-container"><div id="chef-bar" class="bar-fill"></div></div>
+
+<!-- ═══ PHONE STATUS ═══ -->
+<div id="phone-status"></div>
+
+<canvas id="game-canvas"></canvas>
+
+<!-- Config MUST load before game.js -->
+<script src="config.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
