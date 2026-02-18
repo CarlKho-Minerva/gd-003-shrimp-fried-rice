@@ -1,51 +1,75 @@
-# Shrimp Fried Rice — GDC Alt. Ctrl. Prototype
+# 🍤 Shrimp Fried Rice
 
-A browser-based, sensor-driven arcade game where you play as a shrimp fighting for survival in a wok. Built for the GDC Alt. Ctrl. showcase, designed for both phone (motion controls) and desktop (keyboard fallback).
+**GDC Alt. Ctrl. Prototype / Experimental Game**
 
-## Play Now
-- Open `build/index.html` in your browser (mobile recommended)
-- Or upload the zipped build to itch.io for public play
-
-## Features
-- **Tilt & Flick**: Use your phone's sensors to move and toss the shrimp
-- **MSG Collectibles**: Gather MSG to power up and transform
-- **Chef Boss Fight**: Survive the wok, then swat the chef's hand to escape
-- **Calibration**: Personalized motion thresholds for every player
-- **Desktop Mode**: Keyboard controls for testing/demo
-- **Procedural Audio**: All sound effects generated in-browser
-
-## Build Structure
-```
-game-3/
-  build/
-    index.html      # Main HTML shell
-    config.js       # Tunable game constants
-    style.css       # All styles
-    game.js         # Game logic
-  shrimp-fried-rice-v03.zip  # Itch.io-ready build
-  CHANGELOG.md     # Full release notes
-  README.md        # (this file)
-```
-
-## How to Run Locally
-1. `cd game-3/build`
-2. `python3 -m http.server 8089` (or use any static server)
-3. Visit [http://localhost:8089](http://localhost:8089) on your phone or desktop
-
-## Controls
-- **Phone**: Tilt to move, flick up to toss, hard flick to swat chef
-- **Desktop**: Arrow keys to move, Space to toss, Enter to swat
-
-## Hardware Roadmap
-- Piezo sensor for swat detection (impact)
-- IMU (MPU-6050) for tilt/toss (hardware version)
-- FSR for chef grab detection (optional)
-
-## Credits
-- Design & Code: Carl Vincent Kho (@cvk)
-- Instructor: Prof. Watson, Minerva University
-- For GDC Alt. Ctrl. 2026
+An experimental video game where you play as a shrimp navigating a wok. This project is designed for use with an actual cooking wok equipped with IMU sensors, translating natural cooking motions (tossing, rotating, tilting) into gameplay mechanics.
 
 ---
 
-See `CHANGELOG.md` for full release notes and design commentary.
+## 🎮 The Concept
+
+1.  **Survive**: You are a shrimp being fried. Tilt to slide, shake to toss.
+2.  **Transform**: Collect MSG to gain power and transform.
+3.  **Retribution**: The chef takes matters into his own hands. Fight back and give them a taste of their own medicine!
+
+Inspired by the "Ratatouille moment"—the absurd chaos that erupts when the culinary world realizes *who* is actually doing the cooking.
+
+---
+
+## 🛠 Features
+
+-   **Alt. Ctrl. Support**: Designed for IMU-equipped wok hardware (or phone sensors).
+-   **Procedural Audio**: 100% code-generated sound effects via Web Audio API.
+-   **Mobile Sensors**: Play in the browser on your phone—uses `DeviceMotionEvent` for tilt & shake.
+-   **Calibration System**: Built-in 3-flick calibration to map your physical tossing strength to game logic.
+-   **Modular Design**: Clean separation of configuration (`config.js`), logic (`game.js`), and presentation (`style.css`).
+
+---
+
+## 🚀 Getting Started
+
+### Play on Phone (Recommended)
+1.  Host the `/build` directory on a local server (e.g., `python3 -m http.server`).
+2.  Open the URL on your mobile browser.
+3.  **Calibrate**: Follow the on-screen prompts (flick your phone up 3 times).
+
+### Desktop Mode
+If you don't have a phone/sensors available:
+1.  Click **Desktop Mode** on the title screen.
+2.  **Controls**:
+    -   **Arrow Keys**: Tilt/Slide
+    -   **Spacebar**: Toss
+    -   **Enter**: Swat (Stage 2)
+
+---
+
+## 🏗 Project Structure
+
+-   `build/`: The core game build for web/itch.io.
+    -   `index.html`: Main entry point.
+    -   `game.js`: Game engine and logic.
+    -   `config.js`: Tunable constants and difficulty balance.
+    -   `style.css`: Visual styling.
+-   `CHANGELOG.md`: Detailed history of versions and hardware roadmap.
+-   `shrimp-fried-rice-v03.zip`: Production-ready bundle.
+
+---
+
+## 🔧 Hardware Roadmap (GDC Alt. Ctrl.)
+
+For the full arcade experience, we recommend:
+-   **Wok**: A standard cooking wok.
+-   **Sensors**:
+    -   **MPU-6050 (IMU)**: For 6-axis motion tracking.
+    -   **Piezo Element**: Attached to the wok exterior for impact detection (swats).
+    -   **FSR (Force-Sensitive Resistor)**: Under the wok feet to detect pressure.
+-   **ESP32**: To stream sensor data to the browser via WebSockets.
+
+---
+
+## 📜 Acknowledgments
+
+Developed as part of the CS156 / Gamedev curriculum at Minerva University.
+Special thanks to **Professor Watson** and the **Gong Hua Digital Plaza** electronics community in Taiwan for hardware inspiration.
+
+*"If the shrimp can fry the rice, the shrimp can fry the chef."*
