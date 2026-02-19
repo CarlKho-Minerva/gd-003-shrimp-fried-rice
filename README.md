@@ -1,6 +1,6 @@
 # 🍤 Shrimp Fried Rice
 
-**GDC Alt. Ctrl. Prototype / Experimental Game — v0.4**
+**GDC Alt. Ctrl. Prototype / Experimental Game — v0.5**
 
 An experimental video game where you play as a shrimp navigating a wok, then *become* the chef. This project is designed for use with an actual cooking wok equipped with IMU sensors, translating natural cooking motions (tossing, rotating, tilting) into gameplay mechanics.
 
@@ -11,7 +11,7 @@ An experimental video game where you play as a shrimp navigating a wok, then *be
 1.  **Stage 1 — Survive**: You are a shrimp being fried. Tilt to slide, toss to collect MSG.
 2.  **Stage 2 — Fight Back**: The chef reaches into the wok. Ram him while airborne, swat his hand away!
 3.  **Upgrade Shop**: Spend your MSG on jump height, temperature resistance, oil capacity, or speed.
-4.  **Stage 3 — Kitchen Pandemonium**: The shrimp becomes the chef. Top-down kitchen management — pick up ingredients, cook dishes, serve orders before they expire.
+4.  **Stage 3 — Defend Your Wok**: The shrimp fried the rice. You're the chef now — wear the hat, defend your ingredients from waves of human hands reaching into the wok. Same tilt/toss/swat mechanics, no new cognitive load. 3 escalating waves.
 
 Inspired by the "Ratatouille moment"—the absurd chaos that erupts when the culinary world realizes *who* is actually doing the cooking.
 
@@ -33,23 +33,70 @@ Inspired by the "Ratatouille moment"—the absurd chaos that erupts when the cul
 
 ## 🚀 Getting Started
 
-### Play on Phone (Recommended)
-1.  Host the `/build` directory on a local server (e.g., `python3 -m http.server 8089`).
-2.  Open the URL on your mobile browser (HTTPS required for sensors on some Android browsers).
-3.  **Calibrate**: Follow the on-screen prompts (flick your phone up 3 times).
+### Play on Phone via ngrok (Recommended)
+
+Sensors require HTTPS. The easiest cross-device method is [ngrok](https://ngrok.com/):
+
+```bash
+# Terminal 1 — local server
+cd game-3/build
+python3 -m http.server 8080
+
+# Terminal 2 — ngrok tunnel (gives you an HTTPS URL)
+ngrok http 8080
+```
+
+ngrok prints a forwarding URL like:
+```
+Forwarding    https://abcd-12-34-56-78.ngrok-free.app -> http://localhost:8080
+```
+
+**On any phone**, open exactly that `https://abcd-…ngrok-free.app` URL. Do NOT use `http://<mac-ip>:8080` — that's plain HTTP and sensors won't work.
+
+#### Android (Chrome) — Enabling Sensors
+1.  Open the ngrok HTTPS URL in Chrome.
+2.  In the address bar, tap the **lock icon** (or **tune/sliders icon** on newer Chrome).
+3.  Tap **Permissions** → **Site settings**.
+4.  Find **Motion sensors** (or **Sensors**) → set to **Allow**.
+5.  Reload the page. Tilt should now work.
+
+> If the sensor debug HUD still says "no events yet" after allowing, force-close Chrome and reopen.
+
+#### iOS (Safari) — Enabling Sensors
+1.  Open the ngrok HTTPS URL in Safari.
+2.  The game will show a **"Grant Sensor Access"** button.
+3.  Tap it — iOS will prompt for both orientation and motion permissions. **Allow** both.
+4.  If you accidentally denied, go to **Settings → Safari → Advanced → Website Data** → clear the ngrok domain, then reload.
+
+#### Sharing with Remote Playtesters
+- The ngrok URL works from **anywhere in the world** — just send the link.
+- Keep the `ngrok http 8080` terminal running on your Mac.
+- Free ngrok sessions expire after ~2 hours; restart if needed.
+- For a permanent URL, consider deploying to **itch.io** (see below).
+
+### Hosting on itch.io
+1.  Zip the `build/` folder contents (index.html, game.js, config.js, style.css).
+2.  Upload to [itch.io](https://itch.io/) as an **HTML** game.
+3.  Set viewport to **480×800** (portrait).
+4.  itch.io serves over HTTPS, so sensors work automatically.
+5.  On iOS, Safari will still prompt for sensor permissions.
+6.  On Android Chrome, sensors should auto-grant over HTTPS.
+
+> **Note**: itch.io embeds games in an iframe. If sensors are blocked, the player may need to click "Run game" or open in a new tab.
 
 ### Desktop Mode
 If you don't have a phone/sensors available:
 1.  Click **Desktop Mode** on the title screen.
 2.  **Controls**:
-    -   **Arrow Keys / WASD**: Tilt/Slide (S1/S2) or Move chef (S3)
-    -   **Spacebar**: Toss (S1/S2) or Interact with station (S3)
-    -   **Enter**: Swat (Stage 2)
+    -   **Arrow Keys / WASD**: Tilt/Slide
+    -   **Spacebar**: Toss (S1/S2), Swat hands (S3)
+    -   **Enter**: Swat (Stages 2 & 3)
     -   **Escape**: Skip calibration
 
 ### Debug Overlay
 -   Tap the **🐛** button (bottom-right) to show/hide the sensor debug panel.
 -   Shows real-time orientation, acceleration, magnitude, threshold, device type, and permission status.
+-   Works on **all screens** (title, calibration, gameplay) — useful for diagnosing sensor issues before starting a game.
 
 ---
 
@@ -84,4 +131,18 @@ See [CHANGELOG.md](CHANGELOG.md) for full roadmap notes.
 Developed as part of the Gamedev course at Minerva University.
 Special thanks to **Professor Watson** for the upgrade-system feedback (Froggy's Battle model, "every subsystem must be fun") and the **Gong Hua Digital Plaza** electronics community in Taiwan for hardware inspiration.
 
-*"If the shrimp can fry the rice, the shrimp can fry the chef... and then the shrimp can run the kitchen."*
+### Compatibility Playtesters
+
+Tested across multiple iOS and Android devices via ngrok HTTPS tunnel (Feb 19, 2026):
+
+| Device | Tester |
+| :--- | :--- |
+| iPhone 16 Pro | **Benny** (also helped debug sensor permission flow) |
+| iPhone 14 Pro | **Dain** |
+| iPhone 12 | **Chelsea** |
+| iPhone SE (2024) | **Angela** |
+| iPhone 16 | **Manu** |
+| Pixel 6 Pro | Carl (dev) |
+| M4 MacBook Air | Carl (dev, desktop mode) |
+
+*"If the shrimp can fry the rice, the shrimp can fry the chef... and then the shrimp can defend the whole kitchen."*

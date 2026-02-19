@@ -1,5 +1,41 @@
 # Shrimp Fried Rice — Changelog
 
+## v0.5 — "The Shrimp Fried the Rice" (2026-02-19)
+
+### Stage 3: Wave Defense Redesign
+- **Replaced** 4-column kitchen management with **wave-defense in the same circular wok**.
+- Shrimp wears a chef hat, defends scattered ingredients (🍚🥕🧅) from human hands reaching in from the wok rim.
+- **3 escalating waves**: 2 → 3 → 5 hands, getting faster each wave (`S3_HAND_SPEED_MULT: [1.0, 1.2, 1.5]`).
+- Same tilt/toss/swat mechanics — no new cognitive load for GDC Alt Control (1–3 min sessions).
+- Hands reach in, hold for 2s, steal 20 oil if not swatted. Telegraph warning circle during reach phase.
+- **Airborne ram**: Toss into a hand to damage it mid-flight.
+- Wave breaks with oil regen between waves.
+- Removed rectangular canvas, station system, order cards, kitchen hazards.
+
+### Sensor Debug Fix
+- `updateSensorDebug()` now runs on **all screens** (title, calibrate, transitions) — not just during active gameplay.
+- Shows "no events yet (desktop?)" when no sensor data has been received.
+- Immediate populate on toggle (no more blank panel).
+
+### Input Updates
+- Touch/click/Space/Enter now trigger `attemptS3Swat()` during Stage 3.
+- Space does double duty: toss in S1/S2, swat in S3.
+
+### Portfolio
+- Added Shrimp Fried Rice, The Horse and the Infant, and The Booger Picker to portfolio page.
+- Gold border (`#f7c948`) for Watson course games.
+
+### CSS Cleanup
+- Removed `body.stage3-active` rectangular canvas override.
+- Replaced `.order-card` styles with minimal `#s3-wave-info` HUD.
+
+### Compatibility Testing
+- Verified working across 7 devices via ngrok HTTPS tunnel.
+- Playtesters: Benny (iPhone 16 Pro), Dain (iPhone 14 Pro), Chelsea (iPhone 12), Angela (iPhone SE 2024), Manu (iPhone 16).
+- Added ngrok setup, Android Chrome sensor permissions, and itch.io hosting guide to README.
+
+---
+
 ## v0.4 — "Kitchen Pandemonium" (2026-02-19)
 
 ### Stage 3: Kitchen Pandemonium
