@@ -68,6 +68,31 @@ const CFG = {
   CALIBRATION_COOLDOWN: 0.5, // Seconds between valid calibration flicks
   CALIBRATION_MIN_ACCEL: 8,  // Minimum accel to register as a calibration flick
 
+  // ─── Stage 3: Kitchen Pandemonium ───
+  // The shrimp becomes the chef — role reversal!
+  // Watson feedback: "upgrade system…buy upgrades with MSG and oil…
+  //   additional jump height, temperature resistance…shifts into endgame"
+  // Ref: Froggy's Battle upgrade model, Cookie Clicker progressive reveal
+  S3_MSG_NEEDED: 3,          // MSG to collect in S2 to trigger S3
+  S3_ORDER_COUNT: 5,         // Dishes to serve to win
+  S3_ORDER_INTERVAL: 6,      // Seconds between new orders
+  S3_ORDER_DEADLINE: 12,     // Seconds before an order expires (fail penalty)
+  S3_MOVE_SPEED: 4,          // Chef-shrimp movement speed
+  S3_STATION_RADIUS: 30,     // Proximity to interact with a station
+  S3_COOK_TIME: 2.0,         // Seconds spent at stove/wok to cook
+  S3_PLATE_TIME: 1.0,        // Seconds spent at pass to plate up
+  S3_BURN_PENALTY: 15,       // Oil/health lost when an order expires
+  S3_OBSTACLE_INTERVAL: 4,   // Seconds between kitchen hazards
+  S3_FLOOR_SLIP_CHANCE: 0.008, // Per-frame chance of a grease spot spawning
+
+  // ─── Upgrade Shop (Watson: "every subsystem has to be fun") ───
+  UPGRADES: {
+    jumpHeight:  { label: '🦐 Jump Height',  baseCost: 2, costMult: 1.5, maxLevel: 3, effect: 0.3 },
+    tempResist:  { label: '🔥 Temp Resist',  baseCost: 2, costMult: 1.5, maxLevel: 3, effect: 15 },
+    oilCapacity: { label: '🫧 Oil Capacity', baseCost: 3, costMult: 2.0, maxLevel: 2, effect: 25 },
+    speedBoost:  { label: '⚡ Speed Boost',   baseCost: 3, costMult: 2.0, maxLevel: 2, effect: 0.15 },
+  },
+
   // ─── Juice / Effects ───
   SLOWMO_SCALE: 0.15,
   SLOWMO_DURATION_MS: 250,

@@ -8,17 +8,28 @@
 </head>
 <body>
 
-<!-- ═══ TITLE SCREEN ═══ -->
+<!-- ═══ BG CANVAS (animated title particles) ═══ -->
+<canvas id="bg-canvas"></canvas>
+
+<!-- ═══ TITLE SCREEN — Game-like redesign ═══ -->
 <div id="title-screen" class="screen">
-  <h1>SHRIMP<br>FRIED<br>RICE</h1>
-  <div class="subtitle">GDC Alt. Ctrl. Prototype</div>
-  <div class="controls-info">
-    <strong>Tilt</strong> to slide&ensp;·&ensp;<strong>Shake</strong> to toss<br>
-    Collect <strong>MSG</strong> to transform<br>
-    Then <strong>SWAT</strong> the chef 🍤
+  <div class="title-logo">
+    <div class="title-shrimp">🍤</div>
+    <h1>SHRIMP<br>FRIED<br>RICE</h1>
   </div>
-  <button onclick="initGame()">COOK</button>
-  <button class="secondary" onclick="setupDesktopFallback()" style="margin-top:12px">DESKTOP MODE (no sensors)</button>
+  <div class="subtitle">GDC Alt. Ctrl. Prototype&ensp;·&ensp;v0.4</div>
+  <div class="title-tagline">YOU ARE THE SHRIMP</div>
+  <div class="controls-info">
+    <div class="ctrl-row"><span class="ctrl-icon">📱</span> <strong>Tilt</strong> to slide</div>
+    <div class="ctrl-row"><span class="ctrl-icon">🫨</span> <strong>Shake</strong> to toss / swat</div>
+    <div class="ctrl-row"><span class="ctrl-icon">✨</span> Collect <strong>MSG</strong> to transform</div>
+  </div>
+  <button onclick="initGame()" class="btn-cook">
+    <span class="btn-flame">🔥</span> COOK <span class="btn-flame">🔥</span>
+  </button>
+  <button class="secondary" onclick="setupDesktopFallback()" style="margin-top:12px">
+    🖱️ DESKTOP MODE
+  </button>
 </div>
 
 <!-- ═══ CALIBRATION SCREEN ═══ -->
@@ -37,9 +48,22 @@
   <button class="secondary" onclick="skipCalibration()" style="margin-top:24px;font-size:12px">Skip (use defaults)</button>
 </div>
 
-<!-- ═══ TRANSITION SCREEN ═══ -->
+<!-- ═══ TRANSITION SCREEN (S1→S2) ═══ -->
 <div id="transition-screen" class="screen" style="display:none">
   <div id="transition-text" style="font-size:clamp(20px,5vw,28px);text-align:center;line-height:2;max-width:400px"></div>
+</div>
+
+<!-- ═══ TRANSITION 2 SCREEN (S2→S3) ═══ -->
+<div id="transition2-screen" class="screen" style="display:none">
+  <div id="transition2-text" style="font-size:clamp(20px,5vw,28px);text-align:center;line-height:2;max-width:440px"></div>
+</div>
+
+<!-- ═══ UPGRADE SHOP (between stages or mid-game) ═══ -->
+<div id="upgrade-screen" class="screen" style="display:none">
+  <h1 style="font-size:clamp(24px,5vw,36px)">🛒 UPGRADE SHOP</h1>
+  <div class="upgrade-currency" id="upgrade-currency">MSG: <span>0</span></div>
+  <div id="upgrade-list" class="upgrade-list"></div>
+  <button onclick="closeUpgradeShop()">CONTINUE →</button>
 </div>
 
 <!-- ═══ GAME OVER SCREEN ═══ -->
@@ -52,9 +76,11 @@
 
 <!-- ═══ VICTORY SCREEN ═══ -->
 <div id="victory-screen" class="screen" style="display:none">
-  <h1>ORDER UP! 🍤</h1>
+  <h1>ORDER UP! 🍤👨‍🍳</h1>
   <div class="score-display" id="vic-stats"></div>
-  <div style="font-size:14px;opacity:.5;margin-top:12px;font-style:italic">The shrimp fried the rice... and the chef.</div>
+  <div style="font-size:14px;opacity:.5;margin-top:12px;font-style:italic">
+    The shrimp fried the rice... became the chef... and served the world.
+  </div>
   <button onclick="restartGame()">COOK AGAIN</button>
 </div>
 
@@ -76,6 +102,11 @@
   </div>
 </div>
 
+<!-- ═══ Stage 3 HUD: Orders ═══ -->
+<div id="s3-hud" style="display:none">
+  <div id="s3-orders"></div>
+</div>
+
 <div id="oil-label" class="bar-label">OIL LEVEL</div>
 <div id="oil-bar-wrap" class="bar-container"><div id="oil-bar" class="bar-fill"></div></div>
 <div id="chef-label" class="bar-label">CHEF</div>
@@ -83,6 +114,18 @@
 
 <!-- ═══ PHONE STATUS ═══ -->
 <div id="phone-status"></div>
+
+<!-- ═══ SENSOR DEBUG OVERLAY ═══ -->
+<div id="sensor-debug" style="display:none">
+  <div class="dbg-title">📡 SENSOR DEBUG</div>
+  <div id="dbg-orient"></div>
+  <div id="dbg-accel"></div>
+  <div id="dbg-mag"></div>
+  <div id="dbg-thresh"></div>
+  <div id="dbg-device"></div>
+  <div id="dbg-perm"></div>
+</div>
+<button id="debug-toggle" onclick="toggleDebug()" class="dbg-btn">🐛</button>
 
 <canvas id="game-canvas"></canvas>
 

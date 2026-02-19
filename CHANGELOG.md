@@ -1,5 +1,49 @@
 # Shrimp Fried Rice — Changelog
 
+## v0.4 — "Kitchen Pandemonium" (2026-02-19)
+
+### Stage 3: Kitchen Pandemonium
+- **New endgame stage**: After defeating the chef in S2, the shrimp *becomes* the chef in a top-down kitchen management game.
+- **4-column split view** on canvas: Column 0 = "Shrimp Cam" close-up (animated shrimp with chef hat, MSG aura, carrying indicator, upgrade levels); Columns 1–3 = kitchen floor with 4 stations (Fridge → Stove → Wok → Pass).
+- **5 dish types**: Fried Rice 🍚, Pad Thai 🍜, Ramen 🍜, Tempura 🍤, Soup 🍲 — each with unique emoji, cook time, and points.
+- **Order deadline system**: Orders spawn at intervals with countdown timers; urgent orders flash red; missed orders drain oil.
+- **Kitchen hazards**: Grease splashes and steam vents spawn dynamically; floor slip chance adds tension.
+- **Victory condition**: Serve 5 orders to win. Burn meter still active (with upgrade resistance).
+- **Transition cinematic**: "ROLE REVERSAL" → "YOU ARE THE CHEF NOW" → upgrade shop → kitchen.
+
+### Upgrade Shop (Watson Feedback)
+- **Professor Watson's core insight**: *"Buy those upgrades with MSG and oil... additional jump height or temperature resistance"* (28:37), referencing Froggy's Battle progression model.
+- **MSG currency**: All MSG collected across S1 carries over as upgrade currency.
+- **4 upgrade paths**: Jump Height (higher tosses), Temp Resist (slower burn), Oil Capacity (bigger tank), Speed Boost (faster kitchen movement).
+- **Escalating costs**: Each upgrade level costs more (base × multiplier^level), with max levels per path.
+- **"Every subsystem must be fun"** (Watson 00:00): Upgrade shop is a strategic decision point, not just a menu.
+
+### Title Screen Polish
+- **Animated title**: Bouncing shrimp emoji (🍤) with shimmer effect, pulsing tagline "YOU ARE THE SHRIMP."
+- **Background particle system**: Floating emoji (✨🔥🍤💫🫧) on a dedicated `<canvas>` behind the UI.
+- **Game-like controls**: Reorganized into icon-labeled rows (📱🖥🔧) instead of plain buttons.
+- **Version badge**: v0.4 in footer.
+
+### Sensor Debug Overlay
+- **Toggle**: 🐛 button in bottom-right corner.
+- **Real-time data**: Orientation (alpha/beta/gamma), acceleration (x/y/z), magnitude, threshold, device type, permission status.
+- **Terminal aesthetic**: Monospace green-on-black panel; green = sensor active, red = sensor missing.
+- **Purpose**: Diagnose accelerometer issues on iPhone 16 Pro and Pixel 6 Pro during USB-C testing.
+
+### iOS / Android Compatibility
+- **iOS**: Now requests BOTH `DeviceOrientationEvent.requestPermission()` AND `DeviceMotionEvent.requestPermission()` — previous versions only requested orientation.
+- **Android**: Auto-grants sensors; UA detection identifies Pixel 6 Pro specifically.
+- **Device detection**: `detectDevice()` function classifies iPhone, Pixel, iPad, Android, and desktop via User-Agent string.
+- **Sensor debug tracking**: Logs which permissions are granted/denied for debugging cross-device issues.
+
+### Bug Fixes
+- Fixed garbled code blocks from previous session's edit operations (corrupted collectibles guard, duplicate obstacle spawning, mangled color strings).
+- Chef defeat in both `attemptSwat()` and `updateChef()` ram collision now correctly routes to `startTransition2()` instead of `triggerVictory()`.
+- S1/S2-specific code (shrimp physics, collectibles, obstacles) properly guarded with `if (stage !== STAGE.S3)` to prevent running during kitchen mode.
+- Burn meter game-over check restored inside S1/S2 physics guard.
+
+---
+
 ## v0.3 — "The Chef Takes Matters Into His Own Hands" (2026-02-18)
 
 ### Architecture

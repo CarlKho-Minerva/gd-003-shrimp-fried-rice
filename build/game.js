@@ -1,9 +1,12 @@
 /* ═══════════════════════════════════════════════════════════════
- *  GAME.JS — Shrimp Fried Rice — v0.3.0
+ *  GAME.JS — Shrimp Fried Rice — v0.4.0
  *  GDC Alt. Ctrl. Prototype
  *  Hardware target: Wok + IMU (Arduino/ESP32) + Piezo
  *  This build:  Phone tilt + shake via browser sensors
  *  Depends on:  config.js (loaded first)
+ *  Stage 3: Kitchen Pandemonium — shrimp becomes the chef
+ *  Watson feedback: upgrade system, "every subsystem must be fun"
+ *  Ref: Froggy's Battle, Cookie Clicker progressive reveal
  * ═══════════════════════════════════════════════════════════════ */
 
 const canvas = document.getElementById('game-canvas');
@@ -81,6 +84,31 @@ function playSound(type) {
       g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
       osc.connect(g).connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.12); break;
     }
+    case 'ding': {
+      const osc = audioCtx.createOscillator(); const g = audioCtx.createGain();
+      osc.type = 'triangle'; osc.frequency.value = 1200;
+      g.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+      osc.connect(g).connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.25); break;
+    }
+    case 'fail': {
+      const osc = audioCtx.createOscillator(); const g = audioCtx.createGain();
+      osc.type = 'sawtooth'; osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.3);
+      g.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+      osc.connect(g).connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.35); break;
+    }
+    case 'upgrade': {
+      [0, 0.08, 0.16].forEach((t, i) => {
+        const osc = audioCtx.createOscillator(); const g = audioCtx.createGain();
+        osc.type = 'sine'; osc.frequency.value = [440, 554, 660][i];
+        g.gain.setValueAtTime(0.1, audioCtx.currentTime + t);
+        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + t + 0.15);
+        osc.connect(g).connect(audioCtx.destination);
+        osc.start(audioCtx.currentTime + t); osc.stop(audioCtx.currentTime + t + 0.2);
+      }); break;
+    }
   }
 }
 
@@ -94,7 +122,7 @@ const WOK = {
 };
 
 /* ═══ GAME STATE ═══ */
-const STAGE = { TITLE: 0, CALIBRATE: 1, S1: 2, TRANSITION: 3, S2: 4, GAMEOVER: 5, VICTORY: 6 };
+const STAGE = { TITLE: 0, CALIBRATE: 1, S1: 2, TRANSITION: 3, S2: 4, TRANSITION2: 5, UPGRADE: 6, S3: 7, GAMEOVER: 8, VICTORY: 9 };
 let stage = STAGE.TITLE;
 let gameRunning = false;
 let gameTime = 0;
@@ -112,6 +140,7 @@ let currentDrag = CFG.BASE_DRAG;
 let oilItems = [];
 let msgItems = [];
 let msgCollected = 0;
+let totalMsgCollected = 0;   // Lifetime MSG (currency for upgrades)
 let obstacles = [];
 let particles = [];
 
@@ -144,6 +173,42 @@ let lastAccel = { x: 0, y: 0, z: 0 };
 let accelMagnitude = 0;
 let keys = {};
 
+// Sensor debug
+let sensorDebug = {
+  visible: false,
+  orient: { alpha: 0, beta: 0, gamma: 0 },
+  accel: { x: 0, y: 0, z: 0 },
+  mag: 0,
+  device: 'unknown',
+  permission: 'pending',
+  hasOrientation: false,
+  hasMotion: false,
+};
+
+// Upgrades (Watson: "buy upgrades with MSG and oil")
+let upgrades = {
+  jumpHeight: 0,
+  tempResist: 0,
+  oilCapacity: 0,
+  speedBoost: 0,
+};
+
+// Stage 3: Kitchen Pandemonium
+let kitchen = {
+  // Chef-shrimp position (top-down kitchen)
+  chef: { x: 0, y: 0, angle: 0 },
+  // Stations: stove, wok, fridge, pass (serving window)
+  stations: [],
+  orders: [],       // Active orders to fill
+  ordersServed: 0,
+  orderTimer: 0,
+  hazards: [],      // Floor grease, steam bursts, etc.
+  hazardTimer: 0,
+  // 4-column split: col 0 = shrimp cam, cols 1-3 = kitchen lanes
+  splitView: true,
+  wokMiniState: null,   // Tiny wok replay showing where you came from
+};
+
 // Calibration
 let calibration = {
   active: false,
@@ -153,18 +218,23 @@ let calibration = {
   swatThreshold: CFG.SWAT_THRESHOLD,
 };
 
+// Title background particles
+let bgParticles = [];
+
 /* ═══ UI HELPERS ═══ */
 const $ = id => document.getElementById(id);
 
 function hideAllScreens() {
-  ['title-screen','calibration-screen','transition-screen','gameover-screen','victory-screen'].forEach(id => $(id).style.display = 'none');
+  ['title-screen','calibration-screen','transition-screen','transition2-screen','upgrade-screen','gameover-screen','victory-screen'].forEach(id => $(id).style.display = 'none');
   $('hud').style.display = 'none';
   $('oil-label').style.display = 'none';
   $('oil-bar-wrap').style.display = 'none';
   $('chef-label').style.display = 'none';
   $('chef-bar-wrap').style.display = 'none';
+  $('s3-hud').style.display = 'none';
   $('stage-announce').style.opacity = '0';
   document.body.classList.remove('burn-pulse');
+  document.body.classList.remove('stage3-active');
 }
 
 function showScreen(id) { hideAllScreens(); if (id) $(id).style.display = 'flex'; }
@@ -229,6 +299,8 @@ function setupDeviceOrientation() {
   window.addEventListener('deviceorientation', e => {
     if (e.gamma === null || e.beta === null) return;
     hasDeviceOrientation = true;
+    sensorDebug.hasOrientation = true;
+    sensorDebug.orient = { alpha: e.alpha || 0, beta: e.beta || 0, gamma: e.gamma || 0 };
     tiltX = Math.max(-1, Math.min(1, (e.gamma || 0) / 45));
     tiltY = Math.max(-1, Math.min(1, (e.beta || 0) / 45));
     updatePhoneStatus('phone');
@@ -239,8 +311,11 @@ function setupDeviceMotion() {
   window.addEventListener('devicemotion', e => {
     const a = e.accelerationIncludingGravity;
     if (!a) return;
+    sensorDebug.hasMotion = true;
+    sensorDebug.accel = { x: a.x || 0, y: a.y || 0, z: a.z || 0 };
     const dx = a.x - lastAccel.x, dy = a.y - lastAccel.y, dz = a.z - lastAccel.z;
     accelMagnitude = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    sensorDebug.mag = accelMagnitude;
     lastAccel = { x: a.x, y: a.y, z: a.z };
 
     // Calibration mode
@@ -258,6 +333,18 @@ function setupDeviceMotion() {
     }
   });
 }
+
+// Detect device type for debug
+function detectDevice() {
+  const ua = navigator.userAgent;
+  if (/iPhone/.test(ua)) sensorDebug.device = 'iPhone';
+  else if (/iPad/.test(ua)) sensorDebug.device = 'iPad';
+  else if (/Android/.test(ua)) sensorDebug.device = 'Android';
+  else if (/Mac/.test(ua)) sensorDebug.device = 'macOS';
+  else if (/Windows/.test(ua)) sensorDebug.device = 'Windows';
+  else sensorDebug.device = 'Unknown';
+}
+detectDevice();
 
 // Mouse / Touch (desktop testing + mobile fallback)
 window.addEventListener('mousemove', e => {
@@ -364,12 +451,34 @@ function skipCalibration() {
 /* ═══ GAME FLOW ═══ */
 function initGame() {
   ensureAudio();
+  stopBgParticles();
+
+  // iOS 13+ requires explicit permission request from user gesture
   if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-    DeviceOrientationEvent.requestPermission().then(r => {
-      if (r === 'granted') { setupDeviceOrientation(); setupDeviceMotion(); startCalibration(); }
-      else { setupDesktopFallback(); }
-    }).catch(() => { setupDesktopFallback(); });
+    sensorDebug.device = sensorDebug.device.includes('iPhone') || sensorDebug.device.includes('iPad') ? sensorDebug.device : 'iOS';
+    Promise.all([
+      DeviceOrientationEvent.requestPermission(),
+      typeof DeviceMotionEvent.requestPermission === 'function'
+        ? DeviceMotionEvent.requestPermission()
+        : Promise.resolve('granted')
+    ]).then(([orientPerm, motionPerm]) => {
+      sensorDebug.permission = `orient:${orientPerm} motion:${motionPerm}`;
+      if (orientPerm === 'granted' && motionPerm === 'granted') {
+        setupDeviceOrientation();
+        setupDeviceMotion();
+        startCalibration();
+      } else {
+        setupDesktopFallback();
+      }
+    }).catch(err => {
+      console.warn('[Sensor] Permission error:', err);
+      sensorDebug.permission = 'denied/error';
+      setupDesktopFallback();
+    });
   } else {
+    // Android Chrome: sensors auto-granted (no permission API)
+    // Some Android browsers need HTTPS for sensor access
+    sensorDebug.permission = 'auto (no API)';
     setupDeviceOrientation();
     setupDeviceMotion();
     // If sensors fire within 500ms, we'll calibrate; otherwise skip
@@ -382,6 +491,8 @@ function initGame() {
 
 function setupDesktopFallback() {
   ensureAudio();
+  stopBgParticles();
+  sensorDebug.permission = 'desktop mode';
   updatePhoneStatus('desktop');
   skipCalibration();
 }
@@ -414,7 +525,7 @@ function resetAll() {
   shrimp.scale = 1; shrimp.angle = 0; shrimp.wobble = 0;
   oilLevel = CFG.OIL_MAX; burnMeter = 0;
   oilItems = []; msgItems = []; obstacles = []; particles = [];
-  msgCollected = 0; gameTime = 0; timeScale = 1;
+  msgCollected = 0; totalMsgCollected = 0; gameTime = 0; timeScale = 1;
   oilSpawnTimer = 0; msgSpawnTimer = 0;
   spatulaTimer = randRange(2, 4);
   pepperTimer = randRange(3, 5);
@@ -425,7 +536,10 @@ function resetAll() {
   screenShake = { x: 0, y: 0, intensity: 0 };
   screenFlash = 0; hitFlash = 0; hitCooldown = 0;
   tiltX = 0; tiltY = 0;
+  upgrades = { jumpHeight: 0, tempResist: 0, oilCapacity: 0, speedBoost: 0 };
+  kitchen.orders = []; kitchen.ordersServed = 0; kitchen.hazards = [];
   document.body.classList.remove('burn-pulse');
+  document.body.classList.remove('stage3-active');
 }
 
 function triggerGameOver() {
@@ -441,8 +555,13 @@ function triggerVictory() {
   gameRunning = false;
   stage = STAGE.VICTORY;
   playSound('victory');
-  $('vic-stats').innerHTML = `Time: <span>${fmtTime(gameTime)}</span><br>The shrimp fried the rice... and the chef.`;
+  const served = kitchen.ordersServed || 0;
+  $('vic-stats').innerHTML = `Time: <span>${fmtTime(gameTime)}</span><br>Orders Served: <span>${served}</span><br>The shrimp fried the rice... became the chef... and served the world.`;
   showScreen('victory-screen');
+}
+
+function triggerS3Victory() {
+  triggerVictory();
 }
 
 function startTransition() {
@@ -473,6 +592,170 @@ function startTransition() {
     announce('STAGE 2', 'SWAT THE CHEF');
     $('hud-left-label').textContent = 'CHEF HP';
   }, 5000);
+}
+
+/* ═══ TRANSITION 2: S2 → UPGRADE SHOP → S3 ═══ */
+function startTransition2() {
+  stage = STAGE.TRANSITION2;
+  gameRunning = false;
+  obstacles = [];
+  const el = $('transition2-text');
+  showScreen('transition2-screen');
+
+  el.innerHTML = '<span style="font-size:48px">🍤⚡👨‍🍳</span><br><span style="color:#f7c948;font-weight:800;font-size:28px">ROLE REVERSAL</span><br><span style="color:#ddd;margin-top:12px;display:inline-block">The MSG courses through you...<br>You\'re not the ingredient anymore.</span>';
+  setTimeout(() => {
+    el.innerHTML = '<span style="font-size:56px">👨‍🍳</span><br><span style="color:#ff6b35;font-weight:800;font-size:24px">YOU ARE THE CHEF NOW</span><br><span style="color:#ddd;margin-top:8px;display:inline-block;font-size:16px">Run the kitchen. Serve the orders.<br>Don\'t let anything burn.</span>';
+  }, 3000);
+  setTimeout(() => {
+    showUpgradeShop();
+  }, 6000);
+}
+
+/* ═══ UPGRADE SHOP ═══ */
+// Watson: "upgrade system...buy those upgrades with MSG and oil...
+//   additional jump height or temperature resistance"
+// Design: spend accumulated MSG on permanent buffs before S3
+function showUpgradeShop() {
+  stage = STAGE.UPGRADE;
+  hideAllScreens();
+  showScreen('upgrade-screen');
+  renderUpgradeShop();
+}
+
+function renderUpgradeShop() {
+  const currency = totalMsgCollected;
+  $('upgrade-currency').innerHTML = `MSG: <span>${currency}</span>`;
+  const list = $('upgrade-list');
+  list.innerHTML = '';
+  for (const [key, cfg] of Object.entries(CFG.UPGRADES)) {
+    const level = upgrades[key];
+    const cost = Math.ceil(cfg.baseCost * Math.pow(cfg.costMult, level));
+    const maxed = level >= cfg.maxLevel;
+    const canBuy = currency >= cost && !maxed;
+
+    const row = document.createElement('div');
+    row.className = 'upgrade-row';
+    row.innerHTML = `
+      <div class="upgrade-info">
+        <div class="upgrade-name">${cfg.label}</div>
+        <div class="upgrade-level">Lv ${level}/${cfg.maxLevel}${maxed ? ' MAX' : ''}</div>
+      </div>
+      <button class="upgrade-buy" ${canBuy ? '' : 'disabled'} data-key="${key}" data-cost="${cost}">
+        ${maxed ? 'MAX' : cost + ' MSG'}
+      </button>
+    `;
+    list.appendChild(row);
+  }
+  list.querySelectorAll('.upgrade-buy:not([disabled])').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const k = btn.dataset.key;
+      const c = parseInt(btn.dataset.cost);
+      if (totalMsgCollected >= c && upgrades[k] < CFG.UPGRADES[k].maxLevel) {
+        totalMsgCollected -= c;
+        upgrades[k]++;
+        playSound('upgrade');
+        applyUpgrades();
+        renderUpgradeShop();
+      }
+    });
+  });
+}
+
+function applyUpgrades() {
+  // Jump height: increase AIR_DURATION
+  // Temp resist: slow burn rate
+  // Oil capacity: increase OIL_MAX (effective)
+  // Speed boost: increase tilt sensitivity
+  // These are applied dynamically in the update loop
+}
+
+function getUpgradeBonus(key) {
+  const cfg = CFG.UPGRADES[key];
+  return upgrades[key] * cfg.effect;
+}
+
+function closeUpgradeShop() {
+  startS3();
+}
+
+/* ═══ STAGE 3: KITCHEN PANDEMONIUM ═══ */
+// The shrimp is now the chef! Top-down kitchen view.
+// 4-column layout: col 1 = shrimp close-up, cols 2-4 = kitchen floor
+
+const KITCHEN_DISHES = [
+  { name: 'Fried Rice', emoji: '🍚', color: '#ffd700' },
+  { name: 'Ramen', emoji: '🍜', color: '#ff8844' },
+  { name: 'Dumplings', emoji: '🥟', color: '#88cc44' },
+  { name: 'Tempura', emoji: '🍤', color: '#ff6b35' },
+  { name: 'Miso Soup', emoji: '🍲', color: '#aa88ff' },
+];
+
+const KITCHEN_STATIONS = [
+  { id: 'fridge', x: 0.15, y: 0.15, label: '🧊 FRIDGE', color: '#4488ff' },
+  { id: 'stove',  x: 0.5,  y: 0.12, label: '🔥 STOVE',  color: '#ff4444' },
+  { id: 'wok',    x: 0.85, y: 0.15, label: '🍳 WOK',     color: '#ff8800' },
+  { id: 'pass',   x: 0.5,  y: 0.88, label: '🔔 PASS',    color: '#44ff44' },
+];
+
+function initKitchen() {
+  kitchen.chef = { x: WOK.cx(), y: WOK.cy(), angle: 0, carrying: null, cookTimer: 0, atStation: null };
+  kitchen.stations = KITCHEN_STATIONS.map(s => ({
+    ...s,
+    worldX: WOK.size * s.x,
+    worldY: WOK.size * s.y,
+  }));
+  kitchen.orders = [];
+  kitchen.ordersServed = 0;
+  kitchen.orderTimer = CFG.S3_ORDER_INTERVAL * 0.5; // First order comes sooner
+  kitchen.hazards = [];
+  kitchen.hazardTimer = CFG.S3_OBSTACLE_INTERVAL;
+}
+
+function spawnOrder() {
+  if (kitchen.orders.filter(o => !o.done).length >= 4) return; // Max 4 active orders
+  const dish = KITCHEN_DISHES[Math.floor(Math.random() * KITCHEN_DISHES.length)];
+  kitchen.orders.push({
+    dish,
+    deadline: CFG.S3_ORDER_DEADLINE,
+    state: 'new', // new → cooking → ready → served | expired
+    done: false,
+    progress: 0,
+  });
+  playSound('ding');
+}
+
+function startS3() {
+  hideAllScreens();
+  stage = STAGE.S3;
+  gameRunning = true;
+  document.body.classList.add('stage3-active');
+
+  // Change canvas to rectangular for kitchen
+  resizeKitchen();
+
+  initKitchen();
+  showHUD();
+  $('s3-hud').style.display = 'block';
+  $('hud-left-label').textContent = 'ORDERS';
+  $('hud-left-value').textContent = `0 / ${CFG.S3_ORDER_COUNT}`;
+  $('oil-label').style.display = 'block';
+  $('oil-bar-wrap').style.display = 'block';
+  oilLevel = CFG.OIL_MAX + getUpgradeBonus('oilCapacity');
+  burnMeter = 0;
+  announce('STAGE 3', 'KITCHEN PANDEMONIUM');
+}
+
+function resizeKitchen() {
+  const maxW = 600, maxH = 500;
+  const w = Math.min(window.innerWidth - 32, maxW);
+  const h = Math.min(window.innerHeight - 140, maxH);
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  WOK.size = Math.min(w, h); // Use for station positioning
 }
 
 /* ═══ ENTITY SPAWNING ═══ */
@@ -507,7 +790,7 @@ function spawnParticle(x, y, color, speed, size) {
 function tossShrimp() {
   if (shrimp.airborne) return;
   shrimp.airborne = true;
-  shrimp.airTime = CFG.AIR_DURATION;
+  shrimp.airTime = CFG.AIR_DURATION + getUpgradeBonus('jumpHeight');
   shrimp.scale = 1.6;
   playSound('whoosh');
   for (let i = 0; i < 10; i++) spawnParticle(shrimp.x, shrimp.y, '#fff', 3, 5);
@@ -545,7 +828,7 @@ function attemptSwat() {
   spawnPopup(chef.handX, chef.handY, '💥 SWAT!', '#ff4444');
   for (let i = 0; i < 25; i++) spawnParticle(chef.handX, chef.handY, '#ff6666', 12, 5);
 
-  if (chef.hp <= 0) { chef.active = false; setTimeout(triggerVictory, 600); }
+  if (chef.hp <= 0) { chef.active = false; setTimeout(startTransition2, 600); }
 }
 
 /* ═══ EFFECTS ═══ */
@@ -662,7 +945,7 @@ function updateChef(dt) {
           addShake(12); playSound('hit');
           spawnPopup(chef.handX, chef.handY, '💢 RAM!', '#ffaa33');
           for (let i = 0; i < 12; i++) spawnParticle(chef.handX, chef.handY, '#ffaa33', 8, 4);
-          if (chef.hp <= 0) { chef.active = false; setTimeout(triggerVictory, 600); }
+          if (chef.hp <= 0) { chef.active = false; setTimeout(startTransition2, 600); }
         }
       }
       if (chef.stateTimer <= 0) {
@@ -696,7 +979,7 @@ function update() {
   // Calibration cooldown
   if (calibration.cooldown > 0) calibration.cooldown -= rawDt;
 
-  if (!gameRunning || stage === STAGE.TITLE || stage === STAGE.TRANSITION || stage === STAGE.CALIBRATE) return;
+  if (!gameRunning || stage === STAGE.TITLE || stage === STAGE.TRANSITION || stage === STAGE.TRANSITION2 || stage === STAGE.CALIBRATE || stage === STAGE.UPGRADE) return;
 
   const dt = rawDt * timeScale;
   gameTime += dt;
@@ -711,7 +994,8 @@ function update() {
     if (keys['ArrowDown'] || keys['KeyS']) tiltY = 0.8;
   }
 
-  // ─── Shrimp physics ───
+  // ─── Shrimp physics (S1/S2 only — S3 uses kitchen.chef) ───
+  if (stage !== STAGE.S3) {
   if (!shrimp.airborne) {
     currentDrag = 0.75 + (0.13 * (oilLevel / CFG.OIL_MAX));
     shrimp.vx += tiltX * CFG.GRAVITY * 60 * dt;
@@ -764,57 +1048,68 @@ function update() {
   oilLevel = Math.max(0, Math.min(CFG.OIL_MAX, oilLevel));
   burnMeter = Math.max(0, Math.min(CFG.BURN_MAX, burnMeter));
   if (burnMeter >= CFG.BURN_MAX) { triggerGameOver(); return; }
+  } // end S1/S2 shrimp physics guard
 
-  // ─── Collectibles ───
-  for (let i = oilItems.length - 1; i >= 0; i--) {
-    const m = oilItems[i];
-    if (m.collected) continue;
-    const hitR = (shrimp.radius * shrimp.scale) + m.radius;
-    if (shrimp.airborne && dist(shrimp.x, shrimp.y, m.x, m.y) < hitR) {
-      m.collected = true;
-      oilLevel = Math.min(CFG.OIL_MAX, oilLevel + CFG.OIL_REFILL);
-      playSound('collect');
-      spawnPopup(m.x, m.y, '+OIL', '#ffd700');
-      for (let j = 0; j < 10; j++) spawnParticle(m.x, m.y, '#ffd700', 7, 4);
-      oilItems.splice(i, 1);
-    }
-  }
-
-  if (stage === STAGE.S1) {
-    for (let i = msgItems.length - 1; i >= 0; i--) {
-      const m = msgItems[i];
+  // ─── Collectibles (S1/S2 only) ───
+  if (stage !== STAGE.S3) {
+    for (let i = oilItems.length - 1; i >= 0; i--) {
+      const m = oilItems[i];
       if (m.collected) continue;
       const hitR = (shrimp.radius * shrimp.scale) + m.radius;
       if (shrimp.airborne && dist(shrimp.x, shrimp.y, m.x, m.y) < hitR) {
         m.collected = true;
-        msgCollected++;
+        oilLevel = Math.min(CFG.OIL_MAX, oilLevel + CFG.OIL_REFILL);
         playSound('collect');
-        addShake(5);
-        spawnPopup(m.x, m.y, `MSG ${msgCollected}/${CFG.MSG_TO_WIN}`, '#ffffff');
-        for (let j = 0; j < 15; j++) spawnParticle(m.x, m.y, '#ffffff', 8, 5);
-        msgItems.splice(i, 1);
-        if (msgCollected >= CFG.MSG_TO_WIN) { startTransition(); return; }
+        spawnPopup(m.x, m.y, '+OIL', '#ffd700');
+        for (let j = 0; j < 10; j++) spawnParticle(m.x, m.y, '#ffd700', 7, 4);
+        oilItems.splice(i, 1);
       }
     }
-  }
 
-  // ─── Obstacle spawning ───
-  const isS2 = stage === STAGE.S2;
-  spatulaTimer -= dt; pepperTimer -= dt; oilpopTimer -= dt;
-  if (spatulaTimer <= 0) { spawnSpatula(); spatulaTimer = randRange(isS2 ? CFG.S2_SPATULA_MIN : CFG.SPATULA_INTERVAL_MIN, isS2 ? CFG.S2_SPATULA_MAX : CFG.SPATULA_INTERVAL_MAX); }
-  if (pepperTimer <= 0) { spawnPepper(); pepperTimer = randRange(isS2 ? CFG.S2_PEPPER_MIN : CFG.PEPPER_INTERVAL_MIN, isS2 ? CFG.S2_PEPPER_MAX : CFG.PEPPER_INTERVAL_MAX); }
-  if (oilpopTimer <= 0) { spawnOilPop(); oilpopTimer = randRange(isS2 ? CFG.S2_OILPOP_MIN : CFG.OILPOP_INTERVAL_MIN, isS2 ? CFG.S2_OILPOP_MAX : CFG.OILPOP_INTERVAL_MAX); }
+    if (stage === STAGE.S1) {
+      for (let i = msgItems.length - 1; i >= 0; i--) {
+        const m = msgItems[i];
+        if (m.collected) continue;
+        const hitR = (shrimp.radius * shrimp.scale) + m.radius;
+        if (shrimp.airborne && dist(shrimp.x, shrimp.y, m.x, m.y) < hitR) {
+          m.collected = true;
+          msgCollected++;
+          totalMsgCollected++;
+          playSound('collect');
+          addShake(5);
+          spawnPopup(m.x, m.y, `MSG ${msgCollected}/${CFG.MSG_TO_WIN}`, '#ffffff');
+          for (let j = 0; j < 15; j++) spawnParticle(m.x, m.y, '#ffffff', 8, 5);
+          msgItems.splice(i, 1);
+          if (msgCollected >= CFG.MSG_TO_WIN) { startTransition(); return; }
+        }
+      }
+    }
+  } // end S1/S2 collectibles guard
 
-  // Oil & MSG spawning
-  oilSpawnTimer += dt;
-  if (oilSpawnTimer >= CFG.OIL_SPAWN_INTERVAL) { oilSpawnTimer = 0; if (oilItems.filter(m => !m.collected).length < CFG.OIL_MAX_ON_SCREEN) spawnOil(); }
-  if (stage === STAGE.S1) {
-    msgSpawnTimer += dt;
-    if (msgSpawnTimer >= CFG.MSG_SPAWN_INTERVAL) { msgSpawnTimer = 0; if (msgItems.filter(m => !m.collected).length < CFG.MSG_MAX_ON_SCREEN) spawnMSG(); }
-  }
+  // ─── Obstacle & spawn (S1/S2 only — S3 uses kitchen system) ───
+  if (stage !== STAGE.S3) {
+    const isS2 = stage === STAGE.S2;
+    spatulaTimer -= dt; pepperTimer -= dt; oilpopTimer -= dt;
+    if (spatulaTimer <= 0) { spawnSpatula(); spatulaTimer = randRange(isS2 ? CFG.S2_SPATULA_MIN : CFG.SPATULA_INTERVAL_MIN, isS2 ? CFG.S2_SPATULA_MAX : CFG.SPATULA_INTERVAL_MAX); }
+    if (pepperTimer <= 0) { spawnPepper(); pepperTimer = randRange(isS2 ? CFG.S2_PEPPER_MIN : CFG.PEPPER_INTERVAL_MIN, isS2 ? CFG.S2_PEPPER_MAX : CFG.PEPPER_INTERVAL_MAX); }
+    if (oilpopTimer <= 0) { spawnOilPop(); oilpopTimer = randRange(isS2 ? CFG.S2_OILPOP_MIN : CFG.OILPOP_INTERVAL_MIN, isS2 ? CFG.S2_OILPOP_MAX : CFG.OILPOP_INTERVAL_MAX); }
 
-  updateObstacles(dt);
+    oilSpawnTimer += dt;
+    if (oilSpawnTimer >= CFG.OIL_SPAWN_INTERVAL) { oilSpawnTimer = 0; if (oilItems.filter(m => !m.collected).length < CFG.OIL_MAX_ON_SCREEN) spawnOil(); }
+    if (stage === STAGE.S1) {
+      msgSpawnTimer += dt;
+      if (msgSpawnTimer >= CFG.MSG_SPAWN_INTERVAL) { msgSpawnTimer = 0; if (msgItems.filter(m => !m.collected).length < CFG.MSG_MAX_ON_SCREEN) spawnMSG(); }
+    }
+
+    updateObstacles(dt);
+  } // end S1/S2 obstacle & spawn guard
+
   if (stage === STAGE.S2) updateChef(dt);
+
+  // Stage 3: Kitchen Pandemonium
+  if (stage === STAGE.S3) {
+    updateS3(dt);
+  }
 
   // Particles
   for (let i = particles.length - 1; i >= 0; i--) {
@@ -832,7 +1127,14 @@ function update() {
   if (screenFlash > 0) screenFlash -= rawDt * 3;
 
   updateHUD();
-  draw();
+  updateSensorDebug();
+
+  // Route to correct draw function
+  if (stage === STAGE.S3) {
+    drawS3();
+  } else {
+    draw();
+  }
 }
 
 /* ═══ HUD ═══ */
@@ -1115,6 +1417,482 @@ function drawShrimp() {
 
   ctx.restore();
 }
+
+/* ═══ STAGE 3 UPDATE ═══ */
+function updateS3(dt) {
+  const speed = CFG.S3_MOVE_SPEED + getUpgradeBonus('speedBoost') * 10;
+  const kc = kitchen.chef;
+
+  // Move chef-shrimp with tilt/keys
+  if (!hasDeviceOrientation && (keys['ArrowLeft'] || keys['ArrowRight'] || keys['ArrowUp'] || keys['ArrowDown'] || keys['KeyW'] || keys['KeyA'] || keys['KeyS'] || keys['KeyD'])) {
+    tiltX = 0; tiltY = 0;
+    if (keys['ArrowLeft'] || keys['KeyA']) tiltX = -0.8;
+    if (keys['ArrowRight'] || keys['KeyD']) tiltX = 0.8;
+    if (keys['ArrowUp'] || keys['KeyW']) tiltY = -0.8;
+    if (keys['ArrowDown'] || keys['KeyS']) tiltY = 0.8;
+  }
+
+  kc.x += tiltX * speed;
+  kc.y += tiltY * speed;
+  // Clamp to kitchen bounds
+  const margin = 20;
+  const kW = parseInt(canvas.style.width) || WOK.size;
+  const kH = parseInt(canvas.style.height) || WOK.size;
+  kc.x = Math.max(margin, Math.min(kW - margin, kc.x));
+  kc.y = Math.max(margin, Math.min(kH - margin, kc.y));
+  if (Math.abs(tiltX) > 0.05 || Math.abs(tiltY) > 0.05) {
+    kc.angle = Math.atan2(tiltY, tiltX);
+  }
+
+  // Order spawning
+  kitchen.orderTimer -= dt;
+  if (kitchen.orderTimer <= 0) {
+    spawnOrder();
+    kitchen.orderTimer = CFG.S3_ORDER_INTERVAL;
+  }
+
+  // Order deadlines
+  for (const order of kitchen.orders) {
+    if (order.done) continue;
+    order.deadline -= dt;
+    if (order.deadline <= 0 && order.state !== 'served') {
+      order.done = true;
+      order.state = 'expired';
+      oilLevel -= CFG.S3_BURN_PENALTY;
+      addShake(10);
+      playSound('fail');
+    }
+  }
+
+  // Station proximity / interaction
+  kc.atStation = null;
+  for (const station of kitchen.stations) {
+    const d = dist(kc.x, kc.y, station.worldX, station.worldY);
+    if (d < CFG.S3_STATION_RADIUS * 1.5) {
+      kc.atStation = station.id;
+
+      // Auto-interact when close enough
+      if (d < CFG.S3_STATION_RADIUS) {
+        handleStationInteraction(station, dt);
+      }
+    }
+  }
+
+  // Kitchen hazards
+  kitchen.hazardTimer -= dt;
+  if (kitchen.hazardTimer <= 0) {
+    spawnKitchenHazard();
+    kitchen.hazardTimer = CFG.S3_OBSTACLE_INTERVAL;
+  }
+
+  // Update hazards
+  for (let i = kitchen.hazards.length - 1; i >= 0; i--) {
+    const h = kitchen.hazards[i];
+    h.timer -= dt;
+    if (h.timer <= 0) { kitchen.hazards.splice(i, 1); continue; }
+    // Collision with chef-shrimp
+    if (!h.hit && dist(kc.x, kc.y, h.x, h.y) < 25) {
+      h.hit = true;
+      oilLevel -= 8;
+      addShake(5);
+      playSound('hit');
+    }
+  }
+
+  // Oil drain (slower in kitchen — you're the chef now!)
+  const burnResist = getUpgradeBonus('tempResist');
+  if (oilLevel > 0) {
+    oilLevel -= CFG.OIL_DRAIN_BASE * 0.3 * dt;
+    burnMeter = Math.max(0, burnMeter - (CFG.BURN_RATE_COOL + burnResist) * dt);
+  } else {
+    burnMeter += Math.max(5, CFG.BURN_RATE_GROWTH - burnResist) * dt;
+  }
+  oilLevel = Math.max(0, Math.min(CFG.OIL_MAX + getUpgradeBonus('oilCapacity'), oilLevel));
+  burnMeter = Math.max(0, Math.min(CFG.BURN_MAX, burnMeter));
+  if (burnMeter >= CFG.BURN_MAX) { triggerGameOver(); return; }
+
+  // Check victory
+  if (kitchen.ordersServed >= CFG.S3_ORDER_COUNT) {
+    triggerS3Victory();
+    return;
+  }
+
+  // HUD
+  $('hud-left-label').textContent = 'ORDERS';
+  $('hud-left-value').textContent = `${kitchen.ordersServed} / ${CFG.S3_ORDER_COUNT}`;
+
+  updateS3OrderCards();
+}
+
+function handleStationInteraction(station, dt) {
+  const kc = kitchen.chef;
+  const activeOrder = kitchen.orders.find(o => !o.done && o.state !== 'served');
+  if (!activeOrder) return;
+
+  switch (station.id) {
+    case 'fridge':
+      if (activeOrder.state === 'new') {
+        activeOrder.state = 'prepping';
+        activeOrder.progress = 0;
+        kc.carrying = activeOrder.dish.emoji;
+        playSound('collect');
+      }
+      break;
+    case 'stove':
+    case 'wok':
+      if (activeOrder.state === 'prepping') {
+        activeOrder.progress += dt / CFG.S3_COOK_TIME;
+        if (activeOrder.progress >= 1) {
+          activeOrder.state = 'cooked';
+          playSound('pop');
+        }
+      }
+      break;
+    case 'pass':
+      if (activeOrder.state === 'cooked') {
+        activeOrder.state = 'served';
+        activeOrder.done = true;
+        kitchen.ordersServed++;
+        kc.carrying = null;
+        playSound('ding');
+        addShake(5);
+        const sX = station.worldX, sY = station.worldY;
+        spawnPopup(sX, sY, `✅ ${activeOrder.dish.name}!`, '#44ff44');
+        for (let i = 0; i < 12; i++) spawnParticle(sX, sY, '#44ff44', 6, 4);
+      }
+      break;
+  }
+}
+
+function spawnKitchenHazard() {
+  const kW = parseInt(canvas.style.width) || WOK.size;
+  const kH = parseInt(canvas.style.height) || WOK.size;
+  kitchen.hazards.push({
+    x: Math.random() * (kW - 40) + 20,
+    y: Math.random() * (kH - 40) + 20,
+    type: Math.random() > 0.5 ? 'grease' : 'steam',
+    timer: 3 + Math.random() * 2,
+    hit: false,
+  });
+}
+
+function updateS3OrderCards() {
+  const container = $('s3-orders');
+  container.innerHTML = '';
+  for (const order of kitchen.orders) {
+    if (order.done && order.state !== 'expired') continue;
+    if (order.done) continue;
+    const card = document.createElement('div');
+    card.className = 'order-card';
+    if (order.deadline < 4) card.classList.add('urgent');
+    card.innerHTML = `<div class="order-emoji">${order.dish.emoji}</div>
+      <div style="font-size:11px;color:${order.dish.color}">${order.dish.name}</div>
+      <div class="order-timer">${order.deadline.toFixed(1)}s</div>
+      <div style="font-size:10px;color:#888">${order.state}</div>`;
+    container.appendChild(card);
+  }
+}
+
+/* ═══ STAGE 3 DRAW ═══ */
+function drawS3() {
+  const kW = parseInt(canvas.style.width) || WOK.size;
+  const kH = parseInt(canvas.style.height) || WOK.size;
+
+  // Kitchen floor
+  ctx.fillStyle = '#1a1a1e';
+  ctx.fillRect(0, 0, kW, kH);
+
+  // 4-column split lines
+  const colW = kW / 4;
+  ctx.save();
+  ctx.translate(screenShake.x, screenShake.y);
+
+  // Column 0: Shrimp cam (close-up view of the shrimp-as-chef)
+  drawShrimpCam(0, 0, colW, kH);
+
+  // Columns 1-3: Kitchen floor
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(colW, 0, kW - colW, kH);
+  ctx.clip();
+
+  // Tile floor pattern
+  const tileSize = 30;
+  for (let tx = colW; tx < kW; tx += tileSize) {
+    for (let ty = 0; ty < kH; ty += tileSize) {
+      const isLight = ((Math.floor(tx / tileSize) + Math.floor(ty / tileSize)) % 2 === 0);
+      ctx.fillStyle = isLight ? '#22222a' : '#1e1e26';
+      ctx.fillRect(tx, ty, tileSize, tileSize);
+    }
+  }
+
+  // Draw stations
+  for (const station of kitchen.stations) {
+    const sx = colW + (kW - colW) * station.x;
+    const sy = kH * station.y;
+    station.worldX = sx; station.worldY = sy; // Update for collision
+
+    // Station glow
+    const isNear = dist(kitchen.chef.x, kitchen.chef.y, sx, sy) < CFG.S3_STATION_RADIUS * 1.5;
+    ctx.fillStyle = isNear ? station.color + '44' : station.color + '22';
+    ctx.beginPath();
+    ctx.arc(sx, sy, CFG.S3_STATION_RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Station border
+    ctx.strokeStyle = isNear ? station.color : station.color + '66';
+    ctx.lineWidth = isNear ? 3 : 1;
+    ctx.beginPath();
+    ctx.arc(sx, sy, CFG.S3_STATION_RADIUS, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Station label
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px Outfit';
+    ctx.textAlign = 'center';
+    ctx.fillText(station.label, sx, sy + 4);
+  }
+
+  // Draw hazards
+  for (const h of kitchen.hazards) {
+    const alpha = Math.min(1, h.timer / 1);
+    if (h.type === 'grease') {
+      ctx.fillStyle = `rgba(100,80,20,${alpha * 0.5})`;
+      ctx.beginPath(); ctx.arc(h.x, h.y, 15, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgba(255,200,50,${alpha})`;
+      ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('💧', h.x, h.y + 5);
+    } else {
+      ctx.fillStyle = `rgba(200,200,200,${alpha * 0.3})`;
+      ctx.beginPath(); ctx.arc(h.x, h.y, 20, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+      ctx.font = '16px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('💨', h.x, h.y + 5);
+    }
+  }
+
+  // Draw chef-shrimp
+  drawChefShrimp(kitchen.chef.x, kitchen.chef.y, kitchen.chef.angle, kitchen.chef.carrying);
+
+  // Particles
+  for (const p of particles) {
+    ctx.globalAlpha = p.life / p.maxLife;
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.restore(); // Clip restore
+
+  // Column divider
+  ctx.strokeStyle = 'rgba(255,255,255,.15)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(colW, 0); ctx.lineTo(colW, kH); ctx.stroke();
+
+  ctx.restore(); // shake restore
+
+  // Screen flash
+  if (screenFlash > 0) {
+    ctx.fillStyle = `rgba(255,255,255,${Math.max(0, screenFlash)})`;
+    ctx.fillRect(0, 0, kW, kH);
+  }
+}
+
+function drawShrimpCam(x, y, w, h) {
+  // Dark background for shrimp close-up
+  ctx.fillStyle = '#0d0d12';
+  ctx.fillRect(x, y, w, h);
+
+  // Title
+  ctx.fillStyle = '#f7c948';
+  ctx.font = 'bold 11px Outfit';
+  ctx.textAlign = 'center';
+  ctx.fillText('🍤 CHEF SHRIMP', x + w / 2, y + 20);
+
+  // Big animated shrimp
+  const cx = x + w / 2;
+  const cy = y + h * 0.4;
+  const sz = Math.min(w, h) * 0.2;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  const bob = Math.sin(gameTime * 3) * 5;
+  ctx.translate(0, bob);
+
+  // Chef hat
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.ellipse(0, -sz * 1.5, sz * 0.7, sz * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillRect(-sz * 0.5, -sz * 1.5, sz, sz * 0.3);
+
+  // Shrimp body (golden — transformed by MSG)
+  for (let i = 0; i < 5; i++) {
+    const offset = Math.sin(gameTime * 8 + i) * 2;
+    const r = sz * (1 - i * 0.12);
+    ctx.fillStyle = `rgb(${255 - i * 10}, ${180 - i * 15}, ${80 + i * 5})`;
+    ctx.beginPath(); ctx.arc(-i * sz * 0.3, offset, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1; ctx.stroke();
+  }
+
+  // Eyes
+  ctx.fillStyle = '#111';
+  ctx.beginPath(); ctx.arc(sz * 0.2, -sz * 0.3, sz * 0.15, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(sz * 0.2, sz * 0.3, sz * 0.15, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(sz * 0.25, -sz * 0.35, sz * 0.05, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(sz * 0.25, sz * 0.25, sz * 0.05, 0, Math.PI * 2); ctx.fill();
+
+  // MSG aura
+  ctx.globalAlpha = 0.2 + Math.sin(gameTime * 4) * 0.1;
+  const aGrad = ctx.createRadialGradient(0, 0, sz, 0, 0, sz * 3);
+  aGrad.addColorStop(0, 'rgba(255,215,0,0.3)'); aGrad.addColorStop(1, 'rgba(255,215,0,0)');
+  ctx.fillStyle = aGrad;
+  ctx.beginPath(); ctx.arc(0, 0, sz * 3, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+
+  // Carrying indicator
+  if (kitchen.chef.carrying) {
+    ctx.fillStyle = '#fff';
+    ctx.font = '28px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(kitchen.chef.carrying, cx, y + h * 0.72);
+    ctx.font = '11px Outfit';
+    ctx.fillStyle = '#888';
+    ctx.fillText('CARRYING', cx, y + h * 0.72 + 20);
+  }
+
+  // Upgrade levels
+  ctx.fillStyle = '#666';
+  ctx.font = '10px Outfit';
+  ctx.textAlign = 'center';
+  let uy = y + h * 0.84;
+  for (const [key, level] of Object.entries(upgrades)) {
+    if (level > 0) {
+      const cfg = CFG.UPGRADES[key];
+      ctx.fillText(`${cfg.label} Lv${level}`, cx, uy);
+      uy += 14;
+    }
+  }
+}
+
+function drawChefShrimp(x, y, angle, carrying) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath(); ctx.ellipse(0, 3, 14, 8, 0, 0, Math.PI * 2); ctx.fill();
+
+  // Body (golden, chef mode)
+  ctx.rotate(angle);
+  for (let i = 0; i < 3; i++) {
+    const sz = 10 - i * 2;
+    const offset = Math.sin(gameTime * 10 + i) * 1;
+    ctx.fillStyle = `rgb(${255 - i * 15}, ${180 - i * 20}, ${80 + i * 5})`;
+    ctx.beginPath(); ctx.arc(-i * 5, offset, sz, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Chef hat (tiny)
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(-4, -16, 8, 6);
+  ctx.beginPath(); ctx.ellipse(0, -18, 6, 4, 0, 0, Math.PI * 2); ctx.fill();
+
+  // Eyes
+  ctx.fillStyle = '#111';
+  ctx.beginPath(); ctx.arc(4, -3, 2, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(4, 3, 2, 0, Math.PI * 2); ctx.fill();
+
+  ctx.restore();
+
+  // Carrying emoji above head
+  if (carrying) {
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(carrying, x, y - 22);
+  }
+}
+
+/* ═══ SENSOR DEBUG OVERLAY ═══ */
+function toggleDebug() {
+  sensorDebug.visible = !sensorDebug.visible;
+  $('sensor-debug').style.display = sensorDebug.visible ? 'block' : 'none';
+}
+
+function updateSensorDebug() {
+  if (!sensorDebug.visible) return;
+  const o = sensorDebug.orient;
+  const a = sensorDebug.accel;
+  $('dbg-orient').innerHTML = `<b>Orient</b> α:${o.alpha.toFixed(1)} β:${o.beta.toFixed(1)} γ:${o.gamma.toFixed(1)}`;
+  $('dbg-accel').innerHTML = `<b>Accel</b> x:${a.x.toFixed(2)} y:${a.y.toFixed(2)} z:${a.z.toFixed(2)}`;
+
+  const mag = sensorDebug.mag;
+  const toss = calibration.tossThreshold;
+  const swat = calibration.swatThreshold;
+  const magColor = mag > swat ? '#ff4444' : mag > toss ? '#ffaa00' : '#44ff44';
+  $('dbg-mag').innerHTML = `<b>Mag</b> <span style="color:${magColor}">${mag.toFixed(1)}</span> [toss:${toss.toFixed(1)} swat:${swat.toFixed(1)}]`;
+
+  const bar = '█'.repeat(Math.min(20, Math.floor(mag)));
+  $('dbg-thresh').innerHTML = `<span style="color:${magColor}">${bar}</span>`;
+
+  $('dbg-device').innerHTML = `<b>Device</b> ${sensorDebug.device}`;
+  const hasO = sensorDebug.hasOrientation;
+  const hasM = sensorDebug.hasMotion;
+  $('dbg-perm').innerHTML = `<b>Perm</b> ${sensorDebug.permission}<br>` +
+    `<span class="${hasO ? 'dbg-ok' : 'dbg-warn'}">Orient: ${hasO ? 'YES' : 'NO'}</span> ` +
+    `<span class="${hasM ? 'dbg-ok' : 'dbg-warn'}">Motion: ${hasM ? 'YES' : 'NO'}</span>`;
+}
+
+/* ═══ TITLE BACKGROUND PARTICLES ═══ */
+const bgCanvas = document.getElementById('bg-canvas');
+const bgCtx = bgCanvas ? bgCanvas.getContext('2d') : null;
+let bgAnimId = null;
+
+function initBgParticles() {
+  if (!bgCanvas) return;
+  bgCanvas.width = window.innerWidth;
+  bgCanvas.height = window.innerHeight;
+  bgParticles = [];
+  for (let i = 0; i < 40; i++) {
+    bgParticles.push({
+      x: Math.random() * bgCanvas.width,
+      y: Math.random() * bgCanvas.height,
+      vx: (Math.random() - 0.5) * 0.5,
+      vy: -Math.random() * 0.8 - 0.2,
+      size: Math.random() * 3 + 1,
+      alpha: Math.random() * 0.4 + 0.1,
+      emoji: ['✨','🔥','🍤','💫','🫧'][Math.floor(Math.random() * 5)],
+    });
+  }
+  animateBg();
+}
+
+function animateBg() {
+  if (!bgCtx) return;
+  bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+  for (const p of bgParticles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    if (p.y < -20) { p.y = bgCanvas.height + 20; p.x = Math.random() * bgCanvas.width; }
+    if (p.x < -20) p.x = bgCanvas.width + 20;
+    if (p.x > bgCanvas.width + 20) p.x = -20;
+    bgCtx.globalAlpha = p.alpha;
+    bgCtx.font = `${p.size * 6}px sans-serif`;
+    bgCtx.fillText(p.emoji, p.x, p.y);
+  }
+  bgCtx.globalAlpha = 1;
+  bgAnimId = requestAnimationFrame(animateBg);
+}
+
+function stopBgParticles() {
+  if (bgAnimId) { cancelAnimationFrame(bgAnimId); bgAnimId = null; }
+  if (bgCtx) bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+}
+
+// Start particles on load (title screen only)
+initBgParticles();
 
 /* ═══ START ═══ */
 requestAnimationFrame(update);

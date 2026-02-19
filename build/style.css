@@ -1,5 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════
- *  STYLE.CSS — Shrimp Fried Rice — GDC Alt. Ctrl. Prototype
+ *  STYLE.CSS — Shrimp Fried Rice — v0.4 GDC Alt. Ctrl. Prototype
+ *  Stage 3: Kitchen Pandemonium  ·  Sensor Debug overlay
  * ═══════════════════════════════════════════════════════════════ */
 
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap');
@@ -18,7 +19,13 @@ body {
   color: #fff;
 }
 
-/* ─── Canvas ─── */
+/* ─── BG Canvas (title particles) ─── */
+#bg-canvas {
+  position: fixed; inset: 0; z-index: 0;
+  pointer-events: none; width: 100%; height: 100%;
+}
+
+/* ─── Game Canvas ─── */
 #game-canvas {
   display: block;
   border-radius: 50%;
@@ -26,6 +33,15 @@ body {
     inset 0 0 40px rgba(0,0,0,.8),
     0 20px 60px rgba(0,0,0,.4),
     0 0 0 12px rgba(40,40,40,.5);
+  transition: border-radius .6s ease;
+}
+/* Stage 3 switches to rectangular kitchen view */
+body.stage3-active #game-canvas {
+  border-radius: 20px;
+  box-shadow:
+    inset 0 0 30px rgba(0,0,0,.6),
+    0 12px 40px rgba(0,0,0,.4),
+    0 0 0 4px rgba(60,60,60,.5);
 }
 
 /* ─── Screens (Overlays) ─── */
@@ -38,37 +54,69 @@ body {
   transition: opacity .3s ease;
 }
 
-/* ─── Typography ─── */
+/* ─── TITLE SCREEN — Game-like ─── */
+.title-logo {
+  position: relative; text-align: center;
+}
+.title-shrimp {
+  font-size: clamp(56px, 12vw, 80px);
+  animation: shrimpBob 2s ease-in-out infinite;
+  filter: drop-shadow(0 8px 20px rgba(255,120,40,.5));
+}
+@keyframes shrimpBob {
+  0%, 100% { transform: translateY(0) rotate(-5deg); }
+  50% { transform: translateY(-12px) rotate(5deg); }
+}
+
 h1 {
   font-size: clamp(42px, 8vw, 64px);
   font-weight: 800;
-  background: linear-gradient(135deg, #ffaa66, #ffdf88);
+  background: linear-gradient(135deg, #ffaa66, #ffdf88, #ff6b35);
+  background-size: 200% 200%;
+  animation: titleShimmer 3s ease-in-out infinite;
   background-clip: text; -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   text-align: center; line-height: 1.1;
   margin-bottom: 8px;
   filter: drop-shadow(0 4px 12px rgba(255,120,40,.4));
 }
+@keyframes titleShimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
 
 .subtitle {
   color: #888; font-size: 14px;
   text-transform: uppercase; letter-spacing: 3px;
+  margin-bottom: 8px;
+}
+
+.title-tagline {
+  color: #f7c948; font-size: 18px; font-weight: 700;
+  letter-spacing: 6px; text-transform: uppercase;
+  animation: taglinePulse 2.5s ease-in-out infinite;
   margin-bottom: 16px;
+}
+@keyframes taglinePulse {
+  0%, 100% { opacity: .5; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.04); }
 }
 
 .controls-info {
-  background: rgba(255,255,255,.08);
+  background: rgba(255,255,255,.05);
   border: 1px solid rgba(255,255,255,.1);
-  padding: 24px; border-radius: 16px;
+  padding: 20px 28px; border-radius: 16px;
   color: #ddd; font-size: 15px;
-  text-align: center; max-width: 400px;
-  line-height: 1.6; margin-top: 24px;
+  text-align: left; max-width: 320px;
+  line-height: 1.6; margin-top: 16px;
 }
 .controls-info strong { color: #f7c948; }
+.ctrl-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.ctrl-icon { font-size: 20px; width: 28px; text-align: center; }
 
 /* ─── Buttons ─── */
-button {
-  margin-top: 32px; padding: 18px 56px;
+button, .btn-cook {
+  margin-top: 24px; padding: 18px 56px;
   font-family: 'Outfit', sans-serif;
   font-size: 20px; font-weight: 700;
   color: #0a0a0f;
@@ -77,14 +125,22 @@ button {
   transition: all .2s cubic-bezier(.25,1,.5,1);
   box-shadow: 0 8px 32px rgba(255,107,53,.4);
   text-transform: uppercase; letter-spacing: 1px;
+  position: relative; overflow: hidden;
 }
 button:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 12px 40px rgba(255,107,53,.6); filter: brightness(1.1); }
 button:active { transform: scale(.98); }
+.btn-flame { font-size: 18px; }
+.btn-cook { animation: cookPulse 2s ease-in-out infinite; }
+@keyframes cookPulse {
+  0%, 100% { box-shadow: 0 8px 32px rgba(255,107,53,.4); }
+  50% { box-shadow: 0 8px 48px rgba(255,107,53,.7), 0 0 20px rgba(255,60,20,.3); }
+}
 button.secondary {
   background: rgba(255,255,255,.1);
   color: #fff; box-shadow: none;
   border: 1px solid rgba(255,255,255,.2);
   font-size: 14px; padding: 12px 32px;
+  animation: none;
 }
 button.secondary:hover { background: rgba(255,255,255,.2); box-shadow: none; }
 
@@ -107,6 +163,31 @@ button.secondary:hover { background: rgba(255,255,255,.2); box-shadow: none; }
 }
 .hud-block .label { color: rgba(255,255,255,.6); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
 .hud-block .value { font-weight: 800; font-size: 22px; }
+
+/* ─── Stage 3 HUD: Orders ─── */
+#s3-hud {
+  position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+  z-index: 25; display: none;
+  pointer-events: none;
+}
+#s3-orders {
+  display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
+}
+.order-card {
+  background: rgba(20,20,25,.9);
+  border: 2px solid rgba(255,255,255,.15);
+  border-radius: 12px; padding: 8px 14px;
+  font-size: 13px; text-align: center;
+  min-width: 80px; transition: all .3s;
+}
+.order-card.urgent { border-color: #ff4444; animation: orderUrgent .5s infinite; }
+@keyframes orderUrgent {
+  0%, 100% { background: rgba(255,50,50,.1); }
+  50% { background: rgba(255,50,50,.3); }
+}
+.order-card.done { border-color: #44ff44; opacity: .5; }
+.order-emoji { font-size: 22px; }
+.order-timer { font-size: 11px; color: #f7c948; margin-top: 4px; }
 
 /* ─── Bars ─── */
 .bar-container {
@@ -168,6 +249,35 @@ button.secondary:hover { background: rgba(255,255,255,.2); box-shadow: none; }
   margin-top: 24px; letter-spacing: 1px;
 }
 
+/* ─── Upgrade Shop ─── */
+.upgrade-currency {
+  font-size: 18px; color: rgba(255,255,255,.7); margin-top: 12px;
+}
+.upgrade-currency span { color: #ffd700; font-weight: 800; font-size: 22px; }
+.upgrade-list {
+  display: flex; flex-direction: column; gap: 10px;
+  margin-top: 20px; max-width: 380px; width: 90%;
+}
+.upgrade-row {
+  display: flex; align-items: center; justify-content: space-between;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 12px; padding: 12px 16px;
+  transition: all .2s;
+}
+.upgrade-row:hover { background: rgba(255,255,255,.1); }
+.upgrade-info { text-align: left; }
+.upgrade-name { font-weight: 700; font-size: 15px; }
+.upgrade-level { font-size: 12px; color: rgba(255,255,255,.5); margin-top: 2px; }
+.upgrade-buy {
+  padding: 8px 16px !important; margin: 0 !important;
+  font-size: 13px !important; min-width: 80px;
+}
+.upgrade-buy:disabled {
+  opacity: .3; cursor: not-allowed; transform: none !important;
+  box-shadow: none !important;
+}
+
 /* ─── Burn Animations ─── */
 @keyframes blinkDanger {
   0%, 100% { opacity: .6; }
@@ -206,3 +316,37 @@ button.secondary:hover { background: rgba(255,255,255,.2); box-shadow: none; }
 }
 #phone-status.connected { border-color: #44ff44; color: #44ff44; }
 #phone-status.desktop { border-color: #f7c948; color: #f7c948; }
+
+/* ═══ SENSOR DEBUG OVERLAY ═══ */
+#sensor-debug {
+  position: fixed; top: 8px; left: 8px;
+  z-index: 300; padding: 10px 14px;
+  background: rgba(0,0,0,.88);
+  border: 1px solid rgba(0,255,100,.3);
+  border-radius: 10px; font-size: 11px;
+  font-family: 'Courier New', monospace;
+  color: #0f0; line-height: 1.6;
+  max-width: 260px; pointer-events: none;
+  backdrop-filter: blur(4px);
+}
+.dbg-title {
+  font-weight: bold; font-size: 12px;
+  color: #0f0; margin-bottom: 6px;
+  border-bottom: 1px solid rgba(0,255,100,.2);
+  padding-bottom: 4px;
+}
+#sensor-debug div { white-space: nowrap; }
+.dbg-warn { color: #ff4444 !important; }
+.dbg-ok { color: #44ff44 !important; }
+.dbg-btn {
+  position: fixed; top: 8px; right: 44px;
+  z-index: 301; width: 32px; height: 32px;
+  border-radius: 50%; border: 1px solid rgba(255,255,255,.2);
+  background: rgba(20,20,25,.85); cursor: pointer;
+  font-size: 16px; padding: 0; margin: 0;
+  box-shadow: none; display: flex;
+  align-items: center; justify-content: center;
+  animation: none;
+  color: #fff;
+}
+.dbg-btn:hover { background: rgba(40,40,50,.95); transform: none; box-shadow: none; }
