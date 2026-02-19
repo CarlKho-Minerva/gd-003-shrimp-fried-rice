@@ -4,7 +4,7 @@
  *  Hardware target: Wok + IMU (Arduino/ESP32) + Piezo
  *  This build:  Phone tilt + shake via browser sensors
  *  Depends on:  config.js (loaded first)
- *  Stage 3: Kitchen Pandemonium — shrimp becomes the chef
+ *  Stage 3: Wave Defense — the shrimp fried the rice
  *  Watson feedback: upgrade system, "every subsystem must be fun"
  *  Ref: Froggy's Battle, Cookie Clicker progressive reveal
  * ═══════════════════════════════════════════════════════════════ */
@@ -193,20 +193,16 @@ let upgrades = {
   speedBoost: 0,
 };
 
-// Stage 3: Kitchen Pandemonium
-let kitchen = {
-  // Chef-shrimp position (top-down kitchen)
-  chef: { x: 0, y: 0, angle: 0 },
-  // Stations: stove, wok, fridge, pass (serving window)
-  stations: [],
-  orders: [],       // Active orders to fill
-  ordersServed: 0,
-  orderTimer: 0,
-  hazards: [],      // Floor grease, steam bursts, etc.
-  hazardTimer: 0,
-  // 4-column split: col 0 = shrimp cam, cols 1-3 = kitchen lanes
-  splitView: true,
-  wokMiniState: null,   // Tiny wok replay showing where you came from
+// Stage 3: Role Reversal — same wok, shrimp is the chef, defend from hands
+let s3 = {
+  wave: 0,
+  hands: [],          // Active hand instances (like chef hand but multiple)
+  handsSwatted: 0,    // Total hands defeated
+  handsToSpawn: 0,    // Remaining hands to spawn this wave
+  handSpawnTimer: 0,  // Timer until next hand spawn
+  waveBreakTimer: 0,  // Countdown between waves
+  inBreak: false,     // True during wave break
+  ingredients: [],    // Visual rice grains in the wok center (steal targets)
 };
 
 // Calibration
@@ -326,8 +322,9 @@ function setupDeviceMotion() {
 
     if (!gameRunning) return;
 
-    if (accelMagnitude > calibration.swatThreshold && stage === STAGE.S2) {
-      attemptSwat();
+    if (accelMagnitude > calibration.swatThreshold) {
+      if (stage === STAGE.S2) attemptSwat();
+      else if (stage === STAGE.S3) attemptS3Swat();
     } else if (accelMagnitude > calibration.tossThreshold && !shrimp.airborne) {
       tossShrimp();
     }
@@ -360,12 +357,14 @@ canvas.addEventListener('touchstart', e => {
   e.preventDefault();
   if (!gameRunning) return;
   if (stage === STAGE.S2 && chef.state === 'holding') { attemptSwat(); return; }
+  if (stage === STAGE.S3) { attemptS3Swat(); return; }
   if (!shrimp.airborne) tossShrimp();
 }, { passive: false });
 
 window.addEventListener('mousedown', () => {
   if (!gameRunning) return;
   if (stage === STAGE.S2 && chef.state === 'holding') { attemptSwat(); return; }
+  if (stage === STAGE.S3) { attemptS3Swat(); return; }
   if (!shrimp.airborne) tossShrimp();
 });
 
@@ -374,9 +373,12 @@ window.addEventListener('keydown', e => {
   keys[e.code] = true;
   if (e.code === 'Space' && gameRunning) {
     if (stage === STAGE.S2 && chef.state === 'holding') attemptSwat();
+    else if (stage === STAGE.S3) attemptS3Swat();
     else if (!shrimp.airborne) tossShrimp();
   }
-  if (e.code === 'Enter' && gameRunning && stage === STAGE.S2) attemptSwat();
+  if (e.code === 'Enter' && gameRunning && (stage === STAGE.S2 || stage === STAGE.S3)) {
+    if (stage === STAGE.S2) attemptSwat(); else attemptS3Swat();
+  }
   if (e.code === 'Space' && (stage === STAGE.GAMEOVER || stage === STAGE.VICTORY)) restartGame();
   // Skip calibration on desktop
   if (e.code === 'Escape' && stage === STAGE.CALIBRATE) skipCalibration();
@@ -537,7 +539,7 @@ function resetAll() {
   screenFlash = 0; hitFlash = 0; hitCooldown = 0;
   tiltX = 0; tiltY = 0;
   upgrades = { jumpHeight: 0, tempResist: 0, oilCapacity: 0, speedBoost: 0 };
-  kitchen.orders = []; kitchen.ordersServed = 0; kitchen.hazards = [];
+  s3 = { wave: 0, hands: [], handsSwatted: 0, handsToSpawn: 0, handSpawnTimer: 0, waveBreakTimer: 0, inBreak: false, ingredients: [] };
   document.body.classList.remove('burn-pulse');
   document.body.classList.remove('stage3-active');
 }
@@ -555,8 +557,8 @@ function triggerVictory() {
   gameRunning = false;
   stage = STAGE.VICTORY;
   playSound('victory');
-  const served = kitchen.ordersServed || 0;
-  $('vic-stats').innerHTML = `Time: <span>${fmtTime(gameTime)}</span><br>Orders Served: <span>${served}</span><br>The shrimp fried the rice... became the chef... and served the world.`;
+  const swatted = s3.handsSwatted || 0;
+  $('vic-stats').innerHTML = `Time: <span>${fmtTime(gameTime)}</span><br>Hands Swatted: <span>${swatted}</span><br>Waves Survived: <span>${s3.wave}</span><br>The shrimp fried the rice.`;
   showScreen('victory-screen');
 }
 
@@ -604,7 +606,7 @@ function startTransition2() {
 
   el.innerHTML = '<span style="font-size:48px">🍤⚡👨‍🍳</span><br><span style="color:#f7c948;font-weight:800;font-size:28px">ROLE REVERSAL</span><br><span style="color:#ddd;margin-top:12px;display:inline-block">The MSG courses through you...<br>You\'re not the ingredient anymore.</span>';
   setTimeout(() => {
-    el.innerHTML = '<span style="font-size:56px">👨‍🍳</span><br><span style="color:#ff6b35;font-weight:800;font-size:24px">YOU ARE THE CHEF NOW</span><br><span style="color:#ddd;margin-top:8px;display:inline-block;font-size:16px">Run the kitchen. Serve the orders.<br>Don\'t let anything burn.</span>';
+    el.innerHTML = '<span style="font-size:56px">🍤🍳</span><br><span style="color:#ff6b35;font-weight:800;font-size:24px">THE SHRIMP FRIED THE RICE</span><br><span style="color:#ddd;margin-top:8px;display:inline-block;font-size:16px">Now YOU hold the wok.<br>Defend your kitchen from greedy hands!</span>';
   }, 3000);
   setTimeout(() => {
     showUpgradeShop();
@@ -678,84 +680,72 @@ function closeUpgradeShop() {
   startS3();
 }
 
-/* ═══ STAGE 3: KITCHEN PANDEMONIUM ═══ */
-// The shrimp is now the chef! Top-down kitchen view.
-// 4-column layout: col 1 = shrimp close-up, cols 2-4 = kitchen floor
+/* ═══ STAGE 3: ROLE REVERSAL — Shrimp Fried The Rice ═══ */
+// Same wok, same shrimp (now with chef hat). Multiple human hands
+// reach in from outside to steal your ingredients. Swat them all!
+// Reuses the same tilt/toss/swat mechanics the player already knows.
 
-const KITCHEN_DISHES = [
-  { name: 'Fried Rice', emoji: '🍚', color: '#ffd700' },
-  { name: 'Ramen', emoji: '🍜', color: '#ff8844' },
-  { name: 'Dumplings', emoji: '🥟', color: '#88cc44' },
-  { name: 'Tempura', emoji: '🍤', color: '#ff6b35' },
-  { name: 'Miso Soup', emoji: '🍲', color: '#aa88ff' },
-];
-
-const KITCHEN_STATIONS = [
-  { id: 'fridge', x: 0.15, y: 0.15, label: '🧊 FRIDGE', color: '#4488ff' },
-  { id: 'stove',  x: 0.5,  y: 0.12, label: '🔥 STOVE',  color: '#ff4444' },
-  { id: 'wok',    x: 0.85, y: 0.15, label: '🍳 WOK',     color: '#ff8800' },
-  { id: 'pass',   x: 0.5,  y: 0.88, label: '🔔 PASS',    color: '#44ff44' },
-];
-
-function initKitchen() {
-  kitchen.chef = { x: WOK.cx(), y: WOK.cy(), angle: 0, carrying: null, cookTimer: 0, atStation: null };
-  kitchen.stations = KITCHEN_STATIONS.map(s => ({
-    ...s,
-    worldX: WOK.size * s.x,
-    worldY: WOK.size * s.y,
-  }));
-  kitchen.orders = [];
-  kitchen.ordersServed = 0;
-  kitchen.orderTimer = CFG.S3_ORDER_INTERVAL * 0.5; // First order comes sooner
-  kitchen.hazards = [];
-  kitchen.hazardTimer = CFG.S3_OBSTACLE_INTERVAL;
+function initS3() {
+  s3.wave = 0;
+  s3.hands = [];
+  s3.handsSwatted = 0;
+  s3.handsToSpawn = 0;
+  s3.handSpawnTimer = 0;
+  s3.waveBreakTimer = 0;
+  s3.inBreak = false;
+  // Scatter rice/ingredients in the wok center for visual flavor
+  s3.ingredients = [];
+  for (let i = 0; i < 20; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const d = Math.random() * WOK.radius() * 0.35;
+    s3.ingredients.push({
+      x: WOK.cx() + Math.cos(a) * d,
+      y: WOK.cy() + Math.sin(a) * d,
+      type: Math.random() > 0.6 ? '🍚' : Math.random() > 0.5 ? '🥕' : '🧅',
+      stolen: false,
+    });
+  }
 }
 
-function spawnOrder() {
-  if (kitchen.orders.filter(o => !o.done).length >= 4) return; // Max 4 active orders
-  const dish = KITCHEN_DISHES[Math.floor(Math.random() * KITCHEN_DISHES.length)];
-  kitchen.orders.push({
-    dish,
-    deadline: CFG.S3_ORDER_DEADLINE,
-    state: 'new', // new → cooking → ready → served | expired
-    done: false,
-    progress: 0,
+function spawnS3Hand() {
+  const speedMult = CFG.S3_HAND_SPEED_MULT[Math.min(s3.wave, CFG.S3_HAND_SPEED_MULT.length - 1)];
+  const angle = Math.random() * Math.PI * 2;
+  s3.hands.push({
+    angle: angle,
+    reachProgress: 0,
+    state: 'reaching',
+    stateTimer: CFG.S3_HAND_REACH_TIME / speedMult,
+    reachTime: CFG.S3_HAND_REACH_TIME / speedMult,
+    holdTime: CFG.S3_HAND_HOLD_TIME / speedMult,
+    handX: 0, handY: 0,
+    hp: CFG.S3_HAND_HP,
+    invuln: 0,
+    swatted: false,
   });
-  playSound('ding');
 }
 
 function startS3() {
   hideAllScreens();
   stage = STAGE.S3;
   gameRunning = true;
-  document.body.classList.add('stage3-active');
 
-  // Change canvas to rectangular for kitchen
-  resizeKitchen();
+  // Restore circular canvas (same as S1/S2)
+  resize();
 
-  initKitchen();
+  initS3();
   showHUD();
   $('s3-hud').style.display = 'block';
-  $('hud-left-label').textContent = 'ORDERS';
-  $('hud-left-value').textContent = `0 / ${CFG.S3_ORDER_COUNT}`;
+  $('hud-left-label').textContent = 'WAVE';
+  $('hud-left-value').textContent = '1 / ' + CFG.S3_WAVES;
   $('oil-label').style.display = 'block';
   $('oil-bar-wrap').style.display = 'block';
   oilLevel = CFG.OIL_MAX + getUpgradeBonus('oilCapacity');
   burnMeter = 0;
-  announce('STAGE 3', 'KITCHEN PANDEMONIUM');
-}
+  obstacles = [];
 
-function resizeKitchen() {
-  const maxW = 600, maxH = 500;
-  const w = Math.min(window.innerWidth - 32, maxW);
-  const h = Math.min(window.innerHeight - 140, maxH);
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = w * dpr;
-  canvas.height = h * dpr;
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  WOK.size = Math.min(w, h); // Use for station positioning
+  // Start first wave
+  startS3Wave();
+  announce('STAGE 3', 'DEFEND YOUR WOK');
 }
 
 /* ═══ ENTITY SPAWNING ═══ */
@@ -979,7 +969,10 @@ function update() {
   // Calibration cooldown
   if (calibration.cooldown > 0) calibration.cooldown -= rawDt;
 
-  if (!gameRunning || stage === STAGE.TITLE || stage === STAGE.TRANSITION || stage === STAGE.TRANSITION2 || stage === STAGE.CALIBRATE || stage === STAGE.UPGRADE) return;
+  if (!gameRunning || stage === STAGE.TITLE || stage === STAGE.TRANSITION || stage === STAGE.TRANSITION2 || stage === STAGE.CALIBRATE || stage === STAGE.UPGRADE) {
+    updateSensorDebug();
+    return;
+  }
 
   const dt = rawDt * timeScale;
   gameTime += dt;
@@ -994,7 +987,7 @@ function update() {
     if (keys['ArrowDown'] || keys['KeyS']) tiltY = 0.8;
   }
 
-  // ─── Shrimp physics (S1/S2 only — S3 uses kitchen.chef) ───
+  // ─── Shrimp physics (S1/S2 only — S3 handles its own) ───
   if (stage !== STAGE.S3) {
   if (!shrimp.airborne) {
     currentDrag = 0.75 + (0.13 * (oilLevel / CFG.OIL_MAX));
@@ -1086,7 +1079,7 @@ function update() {
     }
   } // end S1/S2 collectibles guard
 
-  // ─── Obstacle & spawn (S1/S2 only — S3 uses kitchen system) ───
+  // ─── Obstacle & spawn (S1/S2 only — S3 uses wave system) ───
   if (stage !== STAGE.S3) {
     const isS2 = stage === STAGE.S2;
     spatulaTimer -= dt; pepperTimer -= dt; oilpopTimer -= dt;
@@ -1106,7 +1099,7 @@ function update() {
 
   if (stage === STAGE.S2) updateChef(dt);
 
-  // Stage 3: Kitchen Pandemonium
+  // Stage 3: Wave Defense
   if (stage === STAGE.S3) {
     updateS3(dt);
   }
@@ -1418,91 +1411,110 @@ function drawShrimp() {
   ctx.restore();
 }
 
-/* ═══ STAGE 3 UPDATE ═══ */
-function updateS3(dt) {
-  const speed = CFG.S3_MOVE_SPEED + getUpgradeBonus('speedBoost') * 10;
-  const kc = kitchen.chef;
+/* ═══ STAGE 3: WAVE DEFENSE — "The Shrimp Fried the Rice" ═══ */
+// Same circular wok. Shrimp wears a chef hat. Multiple human hands
+// reach in from the rim to steal ingredients. Tilt to dodge, toss to
+// jump, shake hard to swat hands away. Survive 3 escalating waves.
 
-  // Move chef-shrimp with tilt/keys
-  if (!hasDeviceOrientation && (keys['ArrowLeft'] || keys['ArrowRight'] || keys['ArrowUp'] || keys['ArrowDown'] || keys['KeyW'] || keys['KeyA'] || keys['KeyS'] || keys['KeyD'])) {
-    tiltX = 0; tiltY = 0;
-    if (keys['ArrowLeft'] || keys['KeyA']) tiltX = -0.8;
-    if (keys['ArrowRight'] || keys['KeyD']) tiltX = 0.8;
-    if (keys['ArrowUp'] || keys['KeyW']) tiltY = -0.8;
-    if (keys['ArrowDown'] || keys['KeyS']) tiltY = 0.8;
-  }
+function startS3Wave() {
+  s3.wave++;
+  s3.inBreak = false;
+  const idx = Math.min(s3.wave - 1, CFG.S3_HANDS_PER_WAVE.length - 1);
+  s3.handsToSpawn = CFG.S3_HANDS_PER_WAVE[idx];
+  s3.handSpawnTimer = 0.5;
+  announce(`WAVE ${s3.wave}`, `${s3.handsToSpawn} hands incoming!`);
+}
 
-  kc.x += tiltX * speed;
-  kc.y += tiltY * speed;
-  // Clamp to kitchen bounds
-  const margin = 20;
-  const kW = parseInt(canvas.style.width) || WOK.size;
-  const kH = parseInt(canvas.style.height) || WOK.size;
-  kc.x = Math.max(margin, Math.min(kW - margin, kc.x));
-  kc.y = Math.max(margin, Math.min(kH - margin, kc.y));
-  if (Math.abs(tiltX) > 0.05 || Math.abs(tiltY) > 0.05) {
-    kc.angle = Math.atan2(tiltY, tiltX);
-  }
-
-  // Order spawning
-  kitchen.orderTimer -= dt;
-  if (kitchen.orderTimer <= 0) {
-    spawnOrder();
-    kitchen.orderTimer = CFG.S3_ORDER_INTERVAL;
-  }
-
-  // Order deadlines
-  for (const order of kitchen.orders) {
-    if (order.done) continue;
-    order.deadline -= dt;
-    if (order.deadline <= 0 && order.state !== 'served') {
-      order.done = true;
-      order.state = 'expired';
-      oilLevel -= CFG.S3_BURN_PENALTY;
-      addShake(10);
-      playSound('fail');
+function attemptS3Swat() {
+  // Swat ALL hands currently in reaching/holding state
+  let hit = false;
+  for (const h of s3.hands) {
+    if ((h.state === 'reaching' || h.state === 'holding') && h.invuln <= 0) {
+      h.hp -= CFG.SWAT_DAMAGE;
+      h.invuln = 0.3;
+      if (h.hp <= 0) {
+        h.state = 'swatted';
+        h.stateTimer = 0.3;
+        s3.handsSwatted++;
+        spawnPopup(h.handX, h.handY, '💥 SWAT!', '#ff4444');
+        for (let j = 0; j < 15; j++) spawnParticle(h.handX, h.handY, '#ff6666', 10, 4);
+      } else {
+        spawnPopup(h.handX, h.handY, '✋ HIT!', '#ffaa44');
+        for (let j = 0; j < 8; j++) spawnParticle(h.handX, h.handY, '#ffaa44', 6, 3);
+      }
+      hit = true;
     }
   }
+  if (hit) {
+    addShake(20);
+    screenFlash = 0.3;
+    playSound('slap');
+    if (navigator.vibrate) navigator.vibrate(CFG.HAPTIC_SWAT);
+    timeScale = CFG.SLOWMO_SCALE;
+    setTimeout(() => { timeScale = 1; }, CFG.SLOWMO_DURATION_MS);
+  }
+}
 
-  // Station proximity / interaction
-  kc.atStation = null;
-  for (const station of kitchen.stations) {
-    const d = dist(kc.x, kc.y, station.worldX, station.worldY);
-    if (d < CFG.S3_STATION_RADIUS * 1.5) {
-      kc.atStation = station.id;
+function updateS3(dt) {
+  // ── Shrimp physics (same wok, same controls) ──
+  if (!shrimp.airborne) {
+    currentDrag = 0.75 + (0.13 * (oilLevel / CFG.OIL_MAX));
+    shrimp.vx += tiltX * CFG.GRAVITY * 60 * dt;
+    shrimp.vy += tiltY * CFG.GRAVITY * 60 * dt;
+    if (Math.abs(shrimp.vx) > 0.1 || Math.abs(shrimp.vy) > 0.1) shrimp.angle = Math.atan2(shrimp.vy, shrimp.vx);
+    const speed = Math.sqrt(shrimp.vx ** 2 + shrimp.vy ** 2);
+    shrimp.wobble = Math.sin(gameTime * 15) * Math.min(speed * 0.1, 0.5);
+    shrimp.vx *= currentDrag; shrimp.vy *= currentDrag;
+    shrimp.x += shrimp.vx; shrimp.y += shrimp.vy;
 
-      // Auto-interact when close enough
-      if (d < CFG.S3_STATION_RADIUS) {
-        handleStationInteraction(station, dt);
+    const dx = shrimp.x - WOK.cx(), dy = shrimp.y - WOK.cy();
+    const d = Math.sqrt(dx * dx + dy * dy);
+    const maxD = WOK.radius() - shrimp.radius;
+    if (d > maxD) {
+      const nx = dx / d, ny = dy / d;
+      shrimp.x = WOK.cx() + nx * maxD; shrimp.y = WOK.cy() + ny * maxD;
+      const dot = shrimp.vx * nx + shrimp.vy * ny;
+      shrimp.vx -= 2 * dot * nx * (1 - CFG.BOUNCE);
+      shrimp.vy -= 2 * dot * ny * (1 - CFG.BOUNCE);
+    }
+  } else {
+    shrimp.airTime -= dt;
+    const prog = 1 - (shrimp.airTime / CFG.AIR_DURATION);
+    shrimp.scale = 1 + Math.sin(prog * Math.PI) * 1.5;
+    shrimp.vx += tiltX * CFG.GRAVITY * 0.1;
+    shrimp.vy += tiltY * CFG.GRAVITY * 0.1;
+    shrimp.x += shrimp.vx; shrimp.y += shrimp.vy;
+    const dx = shrimp.x - WOK.cx(), dy = shrimp.y - WOK.cy(), d = Math.sqrt(dx * dx + dy * dy);
+    if (d > WOK.radius() - shrimp.radius) {
+      shrimp.x = WOK.cx() + (dx / d) * (WOK.radius() - shrimp.radius);
+      shrimp.y = WOK.cy() + (dy / d) * (WOK.radius() - shrimp.radius);
+    }
+
+    // Airborne ram: damage any hand the shrimp touches
+    for (const h of s3.hands) {
+      if ((h.state === 'reaching' || h.state === 'holding') && h.invuln <= 0) {
+        if (dist(shrimp.x, shrimp.y, h.handX, h.handY) < shrimp.radius * shrimp.scale + 18) {
+          h.hp -= CFG.RAM_DAMAGE;
+          h.invuln = 0.4;
+          if (h.hp <= 0) {
+            h.state = 'swatted'; h.stateTimer = 0.3; s3.handsSwatted++;
+            spawnPopup(h.handX, h.handY, '💥 RAM!', '#ffd700');
+          } else {
+            spawnPopup(h.handX, h.handY, '✋', '#ffaa44');
+          }
+          for (let j = 0; j < 10; j++) spawnParticle(h.handX, h.handY, '#ffd700', 8, 4);
+          addShake(8); playSound('hit');
+        }
       }
     }
+
+    if (shrimp.airTime <= 0) { shrimp.airborne = false; shrimp.scale = 1; for (let i = 0; i < 8; i++) spawnParticle(shrimp.x, shrimp.y, '#ffd700', 6, 4); }
   }
 
-  // Kitchen hazards
-  kitchen.hazardTimer -= dt;
-  if (kitchen.hazardTimer <= 0) {
-    spawnKitchenHazard();
-    kitchen.hazardTimer = CFG.S3_OBSTACLE_INTERVAL;
-  }
-
-  // Update hazards
-  for (let i = kitchen.hazards.length - 1; i >= 0; i--) {
-    const h = kitchen.hazards[i];
-    h.timer -= dt;
-    if (h.timer <= 0) { kitchen.hazards.splice(i, 1); continue; }
-    // Collision with chef-shrimp
-    if (!h.hit && dist(kc.x, kc.y, h.x, h.y) < 25) {
-      h.hit = true;
-      oilLevel -= 8;
-      addShake(5);
-      playSound('hit');
-    }
-  }
-
-  // Oil drain (slower in kitchen — you're the chef now!)
+  // ── Oil drain (gentle — you're the chef now) ──
   const burnResist = getUpgradeBonus('tempResist');
   if (oilLevel > 0) {
-    oilLevel -= CFG.OIL_DRAIN_BASE * 0.3 * dt;
+    oilLevel -= CFG.OIL_DRAIN_BASE * CFG.S3_OIL_DRAIN_MULT * dt;
     burnMeter = Math.max(0, burnMeter - (CFG.BURN_RATE_COOL + burnResist) * dt);
   } else {
     burnMeter += Math.max(5, CFG.BURN_RATE_GROWTH - burnResist) * dt;
@@ -1511,168 +1523,134 @@ function updateS3(dt) {
   burnMeter = Math.max(0, Math.min(CFG.BURN_MAX, burnMeter));
   if (burnMeter >= CFG.BURN_MAX) { triggerGameOver(); return; }
 
-  // Check victory
-  if (kitchen.ordersServed >= CFG.S3_ORDER_COUNT) {
-    triggerS3Victory();
+  // ── Wave break ──
+  if (s3.inBreak) {
+    s3.waveBreakTimer -= dt;
+    // Slowly refill oil during break
+    oilLevel = Math.min(CFG.OIL_MAX + getUpgradeBonus('oilCapacity'), oilLevel + 10 * dt);
+    if (s3.waveBreakTimer <= 0) startS3Wave();
+    $('hud-left-label').textContent = 'WAVE';
+    $('hud-left-value').textContent = `${s3.wave} / ${CFG.S3_WAVES}`;
     return;
   }
 
-  // HUD
-  $('hud-left-label').textContent = 'ORDERS';
-  $('hud-left-value').textContent = `${kitchen.ordersServed} / ${CFG.S3_ORDER_COUNT}`;
+  // ── Spawn hands ──
+  s3.handSpawnTimer -= dt;
+  if (s3.handsToSpawn > 0 && s3.handSpawnTimer <= 0) {
+    spawnS3Hand();
+    s3.handsToSpawn--;
+    s3.handSpawnTimer = randRange(CFG.S3_HAND_IDLE_MIN, CFG.S3_HAND_IDLE_MAX);
+  }
 
-  updateS3OrderCards();
-}
+  // ── Update each hand ──
+  const cx = WOK.cx(), cy = WOK.cy(), r = WOK.radius();
+  for (let i = s3.hands.length - 1; i >= 0; i--) {
+    const h = s3.hands[i];
+    h.invuln = Math.max(0, h.invuln - dt);
+    h.stateTimer -= dt;
 
-function handleStationInteraction(station, dt) {
-  const kc = kitchen.chef;
-  const activeOrder = kitchen.orders.find(o => !o.done && o.state !== 'served');
-  if (!activeOrder) return;
+    const edgeX = cx + Math.cos(h.angle) * (r + 30);
+    const edgeY = cy + Math.sin(h.angle) * (r + 30);
+    const targetX = cx + Math.cos(h.angle) * r * 0.15;
+    const targetY = cy + Math.sin(h.angle) * r * 0.15;
 
-  switch (station.id) {
-    case 'fridge':
-      if (activeOrder.state === 'new') {
-        activeOrder.state = 'prepping';
-        activeOrder.progress = 0;
-        kc.carrying = activeOrder.dish.emoji;
-        playSound('collect');
-      }
-      break;
-    case 'stove':
-    case 'wok':
-      if (activeOrder.state === 'prepping') {
-        activeOrder.progress += dt / CFG.S3_COOK_TIME;
-        if (activeOrder.progress >= 1) {
-          activeOrder.state = 'cooked';
-          playSound('pop');
+    switch (h.state) {
+      case 'reaching':
+        h.reachProgress = Math.min(1, h.reachProgress + dt / h.reachTime);
+        if (h.reachProgress >= 1) { h.state = 'holding'; h.stateTimer = h.holdTime; }
+        break;
+      case 'holding':
+        if (h.stateTimer <= 0) {
+          h.state = 'retreating'; h.stateTimer = 0.5;
+          oilLevel -= CFG.S3_HAND_STEAL;
+          const avail = s3.ingredients.filter(ing => !ing.stolen);
+          if (avail.length > 0) avail[Math.floor(Math.random() * avail.length)].stolen = true;
+          addShake(8); playSound('hit');
+          spawnPopup(h.handX, h.handY, `−${CFG.S3_HAND_STEAL} OIL!`, '#ff4444');
         }
-      }
-      break;
-    case 'pass':
-      if (activeOrder.state === 'cooked') {
-        activeOrder.state = 'served';
-        activeOrder.done = true;
-        kitchen.ordersServed++;
-        kc.carrying = null;
-        playSound('ding');
-        addShake(5);
-        const sX = station.worldX, sY = station.worldY;
-        spawnPopup(sX, sY, `✅ ${activeOrder.dish.name}!`, '#44ff44');
-        for (let i = 0; i < 12; i++) spawnParticle(sX, sY, '#44ff44', 6, 4);
-      }
-      break;
-  }
-}
+        break;
+      case 'retreating':
+        h.reachProgress = Math.max(0, h.reachProgress - dt / 0.5);
+        if (h.reachProgress <= 0) { s3.hands.splice(i, 1); continue; }
+        break;
+      case 'swatted':
+        h.reachProgress = Math.max(0, h.reachProgress - dt / 0.3);
+        if (h.reachProgress <= 0) { s3.hands.splice(i, 1); continue; }
+        break;
+    }
 
-function spawnKitchenHazard() {
-  const kW = parseInt(canvas.style.width) || WOK.size;
-  const kH = parseInt(canvas.style.height) || WOK.size;
-  kitchen.hazards.push({
-    x: Math.random() * (kW - 40) + 20,
-    y: Math.random() * (kH - 40) + 20,
-    type: Math.random() > 0.5 ? 'grease' : 'steam',
-    timer: 3 + Math.random() * 2,
-    hit: false,
-  });
-}
+    h.handX = lerp(edgeX, targetX, h.reachProgress);
+    h.handY = lerp(edgeY, targetY, h.reachProgress);
 
-function updateS3OrderCards() {
-  const container = $('s3-orders');
-  container.innerHTML = '';
-  for (const order of kitchen.orders) {
-    if (order.done && order.state !== 'expired') continue;
-    if (order.done) continue;
-    const card = document.createElement('div');
-    card.className = 'order-card';
-    if (order.deadline < 4) card.classList.add('urgent');
-    card.innerHTML = `<div class="order-emoji">${order.dish.emoji}</div>
-      <div style="font-size:11px;color:${order.dish.color}">${order.dish.name}</div>
-      <div class="order-timer">${order.deadline.toFixed(1)}s</div>
-      <div style="font-size:10px;color:#888">${order.state}</div>`;
-    container.appendChild(card);
+    // Hand pushes shrimp on contact
+    if (h.state === 'holding' && !shrimp.airborne) {
+      const d = dist(shrimp.x, shrimp.y, h.handX, h.handY);
+      if (d < shrimp.radius + 20 && hitCooldown <= 0) {
+        hitCooldown = CFG.HIT_INVULN_TIME;
+        oilLevel -= 5;
+        const pushA = Math.atan2(shrimp.y - h.handY, shrimp.x - h.handX);
+        shrimp.vx += Math.cos(pushA) * 8;
+        shrimp.vy += Math.sin(pushA) * 8;
+        addShake(5); playSound('hit');
+      }
+    }
   }
+
+  // ── Wave complete check ──
+  if (s3.handsToSpawn <= 0 && s3.hands.length === 0) {
+    if (s3.wave >= CFG.S3_WAVES) { triggerVictory(); return; }
+    s3.inBreak = true;
+    s3.waveBreakTimer = CFG.S3_WAVE_BREAK;
+    announce('WAVE CLEAR!', `Next wave in ${CFG.S3_WAVE_BREAK}s`);
+    playSound('ding');
+  }
+
+  // ── HUD ──
+  $('hud-left-label').textContent = 'WAVE';
+  $('hud-left-value').textContent = `${s3.wave} / ${CFG.S3_WAVES}`;
 }
 
 /* ═══ STAGE 3 DRAW ═══ */
 function drawS3() {
-  const kW = parseInt(canvas.style.width) || WOK.size;
-  const kH = parseInt(canvas.style.height) || WOK.size;
+  const cx = WOK.cx(), cy = WOK.cy(), r = WOK.radius();
 
-  // Kitchen floor
-  ctx.fillStyle = '#1a1a1e';
-  ctx.fillRect(0, 0, kW, kH);
-
-  // 4-column split lines
-  const colW = kW / 4;
   ctx.save();
   ctx.translate(screenShake.x, screenShake.y);
 
-  // Column 0: Shrimp cam (close-up view of the shrimp-as-chef)
-  drawShrimpCam(0, 0, colW, kH);
+  // Wok base
+  const grad = ctx.createRadialGradient(cx, cy, r * 0.1, cx, cy, r);
+  grad.addColorStop(0, '#2a2520');
+  grad.addColorStop(0.6, '#1a1512');
+  grad.addColorStop(1, '#0d0a08');
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = grad; ctx.fill();
 
-  // Columns 1-3: Kitchen floor
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(colW, 0, kW - colW, kH);
-  ctx.clip();
+  // Wok rim
+  ctx.strokeStyle = '#555'; ctx.lineWidth = 4; ctx.stroke();
 
-  // Tile floor pattern
-  const tileSize = 30;
-  for (let tx = colW; tx < kW; tx += tileSize) {
-    for (let ty = 0; ty < kH; ty += tileSize) {
-      const isLight = ((Math.floor(tx / tileSize) + Math.floor(ty / tileSize)) % 2 === 0);
-      ctx.fillStyle = isLight ? '#22222a' : '#1e1e26';
-      ctx.fillRect(tx, ty, tileSize, tileSize);
-    }
+  // Oil sheen
+  if (oilLevel > 0) {
+    const sheenA = Math.min(0.25, oilLevel / CFG.OIL_MAX * 0.3);
+    const sheen = ctx.createRadialGradient(cx - r * 0.2, cy - r * 0.2, 0, cx, cy, r);
+    sheen.addColorStop(0, `rgba(255,215,0,${sheenA})`);
+    sheen.addColorStop(1, 'rgba(255,215,0,0)');
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.95, 0, Math.PI * 2);
+    ctx.fillStyle = sheen; ctx.fill();
   }
 
-  // Draw stations
-  for (const station of kitchen.stations) {
-    const sx = colW + (kW - colW) * station.x;
-    const sy = kH * station.y;
-    station.worldX = sx; station.worldY = sy; // Update for collision
-
-    // Station glow
-    const isNear = dist(kitchen.chef.x, kitchen.chef.y, sx, sy) < CFG.S3_STATION_RADIUS * 1.5;
-    ctx.fillStyle = isNear ? station.color + '44' : station.color + '22';
-    ctx.beginPath();
-    ctx.arc(sx, sy, CFG.S3_STATION_RADIUS, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Station border
-    ctx.strokeStyle = isNear ? station.color : station.color + '66';
-    ctx.lineWidth = isNear ? 3 : 1;
-    ctx.beginPath();
-    ctx.arc(sx, sy, CFG.S3_STATION_RADIUS, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Station label
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 12px Outfit';
-    ctx.textAlign = 'center';
-    ctx.fillText(station.label, sx, sy + 4);
+  // Ingredients scattered in the wok
+  for (const ing of s3.ingredients) {
+    if (ing.stolen) continue;
+    const bob = Math.sin(gameTime * 2 + ing.x * 0.1) * 2;
+    ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(ing.type, ing.x, ing.y + bob);
   }
 
-  // Draw hazards
-  for (const h of kitchen.hazards) {
-    const alpha = Math.min(1, h.timer / 1);
-    if (h.type === 'grease') {
-      ctx.fillStyle = `rgba(100,80,20,${alpha * 0.5})`;
-      ctx.beginPath(); ctx.arc(h.x, h.y, 15, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = `rgba(255,200,50,${alpha})`;
-      ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('💧', h.x, h.y + 5);
-    } else {
-      ctx.fillStyle = `rgba(200,200,200,${alpha * 0.3})`;
-      ctx.beginPath(); ctx.arc(h.x, h.y, 20, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
-      ctx.font = '16px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('💨', h.x, h.y + 5);
-    }
-  }
+  // Hands
+  for (const h of s3.hands) drawS3Hand(h);
 
-  // Draw chef-shrimp
-  drawChefShrimp(kitchen.chef.x, kitchen.chef.y, kitchen.chef.angle, kitchen.chef.carrying);
+  // Shrimp with chef hat
+  drawS3Shrimp(shrimp.x, shrimp.y);
 
   // Particles
   for (const p of particles) {
@@ -1682,151 +1660,158 @@ function drawS3() {
   }
   ctx.globalAlpha = 1;
 
-  ctx.restore(); // Clip restore
+  // Wave break overlay
+  if (s3.inBreak) {
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#f7c948'; ctx.font = 'bold 22px Outfit'; ctx.textAlign = 'center';
+    ctx.fillText(`NEXT WAVE IN ${Math.ceil(s3.waveBreakTimer)}`, cx, cy);
+    ctx.font = '13px Outfit'; ctx.fillStyle = '#aaa';
+    ctx.fillText('Restoring oil…', cx, cy + 24);
+  }
 
-  // Column divider
-  ctx.strokeStyle = 'rgba(255,255,255,.15)';
-  ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(colW, 0); ctx.lineTo(colW, kH); ctx.stroke();
+  // Wave counter on canvas
+  ctx.fillStyle = '#f7c948'; ctx.font = 'bold 15px Outfit'; ctx.textAlign = 'center';
+  ctx.fillText(`🍤 Wave ${s3.wave} / ${CFG.S3_WAVES}`, cx, cy - r + 22);
 
-  ctx.restore(); // shake restore
+  const active = s3.hands.filter(h => h.state !== 'swatted' && h.state !== 'retreating').length;
+  const remaining = active + s3.handsToSpawn;
+  if (remaining > 0 && !s3.inBreak) {
+    ctx.fillStyle = '#ff6666'; ctx.font = '12px Outfit';
+    ctx.fillText(`${remaining} hand${remaining > 1 ? 's' : ''} remaining`, cx, cy - r + 40);
+  }
+
+  ctx.restore();
 
   // Screen flash
   if (screenFlash > 0) {
     ctx.fillStyle = `rgba(255,255,255,${Math.max(0, screenFlash)})`;
-    ctx.fillRect(0, 0, kW, kH);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 }
 
-function drawShrimpCam(x, y, w, h) {
-  // Dark background for shrimp close-up
-  ctx.fillStyle = '#0d0d12';
-  ctx.fillRect(x, y, w, h);
-
-  // Title
-  ctx.fillStyle = '#f7c948';
-  ctx.font = 'bold 11px Outfit';
-  ctx.textAlign = 'center';
-  ctx.fillText('🍤 CHEF SHRIMP', x + w / 2, y + 20);
-
-  // Big animated shrimp
-  const cx = x + w / 2;
-  const cy = y + h * 0.4;
-  const sz = Math.min(w, h) * 0.2;
+function drawS3Hand(h) {
+  const cx = WOK.cx(), cy = WOK.cy(), r = WOK.radius();
+  const edgeX = cx + Math.cos(h.angle) * (r + 30);
+  const edgeY = cy + Math.sin(h.angle) * (r + 30);
 
   ctx.save();
-  ctx.translate(cx, cy);
-  const bob = Math.sin(gameTime * 3) * 5;
-  ctx.translate(0, bob);
+  // Arm
+  ctx.strokeStyle = h.state === 'swatted' ? '#ff4444' : '#e8c9a0';
+  ctx.lineWidth = h.state === 'holding' ? 14 : 10;
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(edgeX, edgeY); ctx.lineTo(h.handX, h.handY); ctx.stroke();
 
-  // Chef hat
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.ellipse(0, -sz * 1.5, sz * 0.7, sz * 0.5, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillRect(-sz * 0.5, -sz * 1.5, sz, sz * 0.3);
+  // Wrist
+  ctx.strokeStyle = h.state === 'swatted' ? '#cc3333' : '#d4a574';
+  ctx.lineWidth = 8;
+  const wristX = lerp(edgeX, h.handX, 0.7), wristY = lerp(edgeY, h.handY, 0.7);
+  ctx.beginPath(); ctx.moveTo(wristX, wristY); ctx.lineTo(h.handX, h.handY); ctx.stroke();
 
-  // Shrimp body (golden — transformed by MSG)
-  for (let i = 0; i < 5; i++) {
-    const offset = Math.sin(gameTime * 8 + i) * 2;
-    const r = sz * (1 - i * 0.12);
-    ctx.fillStyle = `rgb(${255 - i * 10}, ${180 - i * 15}, ${80 + i * 5})`;
-    ctx.beginPath(); ctx.arc(-i * sz * 0.3, offset, r, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1; ctx.stroke();
-  }
+  // Hand blob
+  ctx.fillStyle = h.state === 'swatted' ? '#ff6666' : (h.state === 'holding' ? '#ffddbb' : '#e8c9a0');
+  ctx.beginPath(); ctx.arc(h.handX, h.handY, h.state === 'holding' ? 18 : 14, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1; ctx.stroke();
 
-  // Eyes
-  ctx.fillStyle = '#111';
-  ctx.beginPath(); ctx.arc(sz * 0.2, -sz * 0.3, sz * 0.15, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(sz * 0.2, sz * 0.3, sz * 0.15, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.beginPath(); ctx.arc(sz * 0.25, -sz * 0.35, sz * 0.05, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(sz * 0.25, sz * 0.25, sz * 0.05, 0, Math.PI * 2); ctx.fill();
-
-  // MSG aura
-  ctx.globalAlpha = 0.2 + Math.sin(gameTime * 4) * 0.1;
-  const aGrad = ctx.createRadialGradient(0, 0, sz, 0, 0, sz * 3);
-  aGrad.addColorStop(0, 'rgba(255,215,0,0.3)'); aGrad.addColorStop(1, 'rgba(255,215,0,0)');
-  ctx.fillStyle = aGrad;
-  ctx.beginPath(); ctx.arc(0, 0, sz * 3, 0, Math.PI * 2); ctx.fill();
-  ctx.globalAlpha = 1;
-
-  ctx.restore();
-
-  // Carrying indicator
-  if (kitchen.chef.carrying) {
-    ctx.fillStyle = '#fff';
-    ctx.font = '28px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(kitchen.chef.carrying, cx, y + h * 0.72);
-    ctx.font = '11px Outfit';
-    ctx.fillStyle = '#888';
-    ctx.fillText('CARRYING', cx, y + h * 0.72 + 20);
-  }
-
-  // Upgrade levels
-  ctx.fillStyle = '#666';
-  ctx.font = '10px Outfit';
-  ctx.textAlign = 'center';
-  let uy = y + h * 0.84;
-  for (const [key, level] of Object.entries(upgrades)) {
-    if (level > 0) {
-      const cfg = CFG.UPGRADES[key];
-      ctx.fillText(`${cfg.label} Lv${level}`, cx, uy);
-      uy += 14;
+  // Grabbing fingers
+  if (h.state === 'holding') {
+    for (let f = 0; f < 4; f++) {
+      const fa = h.angle + Math.PI + (f - 1.5) * 0.3;
+      ctx.fillStyle = '#e8c9a0';
+      ctx.beginPath(); ctx.arc(h.handX + Math.cos(fa) * 16, h.handY + Math.sin(fa) * 16, 5, 0, Math.PI * 2); ctx.fill();
     }
   }
+
+  // Telegraph warning
+  if (h.state === 'reaching' && h.reachProgress < 0.5) {
+    ctx.strokeStyle = `rgba(255,100,100,${0.5 - h.reachProgress})`;
+    ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
+    const tX = cx + Math.cos(h.angle) * r * 0.15, tY = cy + Math.sin(h.angle) * r * 0.15;
+    ctx.beginPath(); ctx.arc(tX, tY, 25, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Invuln flash
+  if (h.invuln > 0 && Math.floor(h.invuln * 10) % 2) {
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.beginPath(); ctx.arc(h.handX, h.handY, 20, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
 }
 
-function drawChefShrimp(x, y, angle, carrying) {
+function drawS3Shrimp(x, y) {
   ctx.save();
   ctx.translate(x, y);
 
   // Shadow
-  ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.beginPath(); ctx.ellipse(0, 3, 14, 8, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath();
+  ctx.ellipse(0, shrimp.radius * 0.6, shrimp.radius * 1.2, shrimp.radius * 0.4, 0, 0, Math.PI * 2);
+  ctx.fill();
 
-  // Body (golden, chef mode)
-  ctx.rotate(angle);
-  for (let i = 0; i < 3; i++) {
-    const sz = 10 - i * 2;
-    const offset = Math.sin(gameTime * 10 + i) * 1;
-    ctx.fillStyle = `rgb(${255 - i * 15}, ${180 - i * 20}, ${80 + i * 5})`;
-    ctx.beginPath(); ctx.arc(-i * 5, offset, sz, 0, Math.PI * 2); ctx.fill();
-  }
+  const s = shrimp.scale || 1;
+  ctx.scale(s, s);
+  ctx.rotate(shrimp.angle + Math.PI / 2);
 
-  // Chef hat (tiny)
+  // Chef hat (big, white)
   ctx.fillStyle = '#fff';
-  ctx.fillRect(-4, -16, 8, 6);
-  ctx.beginPath(); ctx.ellipse(0, -18, 6, 4, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(0, -shrimp.radius * 1.6, shrimp.radius * 0.85, shrimp.radius * 0.55, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillRect(-shrimp.radius * 0.6, -shrimp.radius * 1.6, shrimp.radius * 1.2, shrimp.radius * 0.35);
+
+  // Shrimp body (golden MSG-powered segments)
+  for (let i = 0; i < 4; i++) {
+    const rr = shrimp.radius * (1 - i * 0.15);
+    const off = Math.sin(gameTime * 10 + i * 0.8) * 1.5;
+    ctx.fillStyle = `rgb(${255 - i * 12}, ${180 - i * 15}, ${80 + i * 8})`;
+    ctx.beginPath(); ctx.arc(off, i * shrimp.radius * 0.45, rr, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 0.5; ctx.stroke();
+  }
 
   // Eyes
   ctx.fillStyle = '#111';
-  ctx.beginPath(); ctx.arc(4, -3, 2, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(4, 3, 2, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(shrimp.radius * 0.3, -shrimp.radius * 0.2, 2.5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(-shrimp.radius * 0.3, -shrimp.radius * 0.2, 2.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(shrimp.radius * 0.35, -shrimp.radius * 0.25, 1, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(-shrimp.radius * 0.25, -shrimp.radius * 0.25, 1, 0, Math.PI * 2); ctx.fill();
+
+  // MSG aura
+  ctx.globalAlpha = 0.15 + Math.sin(gameTime * 4) * 0.08;
+  const aG = ctx.createRadialGradient(0, 0, shrimp.radius, 0, 0, shrimp.radius * 2.5);
+  aG.addColorStop(0, 'rgba(255,215,0,0.25)'); aG.addColorStop(1, 'rgba(255,215,0,0)');
+  ctx.fillStyle = aG;
+  ctx.beginPath(); ctx.arc(0, 0, shrimp.radius * 2.5, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Hit flash
+  if (hitCooldown > CFG.HIT_INVULN_TIME - 0.15) {
+    ctx.fillStyle = 'rgba(255,0,0,0.3)';
+    ctx.beginPath(); ctx.arc(0, 0, shrimp.radius * 1.2, 0, Math.PI * 2); ctx.fill();
+  }
 
   ctx.restore();
-
-  // Carrying emoji above head
-  if (carrying) {
-    ctx.font = '16px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(carrying, x, y - 22);
-  }
 }
 
 /* ═══ SENSOR DEBUG OVERLAY ═══ */
 function toggleDebug() {
   sensorDebug.visible = !sensorDebug.visible;
   $('sensor-debug').style.display = sensorDebug.visible ? 'block' : 'none';
+  if (sensorDebug.visible) updateSensorDebug();   // Immediately populate
 }
 
 function updateSensorDebug() {
   if (!sensorDebug.visible) return;
   const o = sensorDebug.orient;
   const a = sensorDebug.accel;
-  $('dbg-orient').innerHTML = `<b>Orient</b> α:${o.alpha.toFixed(1)} β:${o.beta.toFixed(1)} γ:${o.gamma.toFixed(1)}`;
-  $('dbg-accel').innerHTML = `<b>Accel</b> x:${a.x.toFixed(2)} y:${a.y.toFixed(2)} z:${a.z.toFixed(2)}`;
+  const noData = !sensorDebug.hasOrientation && !sensorDebug.hasMotion;
+  $('dbg-orient').innerHTML = noData
+    ? '<b>Orient</b> <span style="color:#888">no events yet (desktop?)</span>'
+    : `<b>Orient</b> α:${o.alpha.toFixed(1)} β:${o.beta.toFixed(1)} γ:${o.gamma.toFixed(1)}`;
+  $('dbg-accel').innerHTML = noData
+    ? '<b>Accel</b> <span style="color:#888">waiting for sensor…</span>'
+    : `<b>Accel</b> x:${a.x.toFixed(2)} y:${a.y.toFixed(2)} z:${a.z.toFixed(2)}`;
 
   const mag = sensorDebug.mag;
   const toss = calibration.tossThreshold;

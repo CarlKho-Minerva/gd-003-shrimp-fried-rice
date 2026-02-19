@@ -68,22 +68,22 @@ const CFG = {
   CALIBRATION_COOLDOWN: 0.5, // Seconds between valid calibration flicks
   CALIBRATION_MIN_ACCEL: 8,  // Minimum accel to register as a calibration flick
 
-  // ─── Stage 3: Kitchen Pandemonium ───
-  // The shrimp becomes the chef — role reversal!
-  // Watson feedback: "upgrade system…buy upgrades with MSG and oil…
-  //   additional jump height, temperature resistance…shifts into endgame"
+  // ─── Stage 3: "The Shrimp Fried The Rice" — Role Reversal ───
+  // Same wok, same shrimp (now with chef hat), but now YOU are the chef.
+  // Multiple human hands reach in to steal your ingredients.
+  // Watson feedback: "upgrade system…buy upgrades with MSG and oil…"
   // Ref: Froggy's Battle upgrade model, Cookie Clicker progressive reveal
-  S3_MSG_NEEDED: 3,          // MSG to collect in S2 to trigger S3
-  S3_ORDER_COUNT: 5,         // Dishes to serve to win
-  S3_ORDER_INTERVAL: 6,      // Seconds between new orders
-  S3_ORDER_DEADLINE: 12,     // Seconds before an order expires (fail penalty)
-  S3_MOVE_SPEED: 4,          // Chef-shrimp movement speed
-  S3_STATION_RADIUS: 30,     // Proximity to interact with a station
-  S3_COOK_TIME: 2.0,         // Seconds spent at stove/wok to cook
-  S3_PLATE_TIME: 1.0,        // Seconds spent at pass to plate up
-  S3_BURN_PENALTY: 15,       // Oil/health lost when an order expires
-  S3_OBSTACLE_INTERVAL: 4,   // Seconds between kitchen hazards
-  S3_FLOOR_SLIP_CHANCE: 0.008, // Per-frame chance of a grease spot spawning
+  S3_WAVES: 3,                  // Number of waves to survive
+  S3_HANDS_PER_WAVE: [2, 3, 5],// Hands per wave (escalating)
+  S3_HAND_REACH_TIME: 1.5,     // Seconds for hand to reach the wok center
+  S3_HAND_HOLD_TIME: 2.0,      // Seconds hand holds inside before retreating
+  S3_HAND_IDLE_MIN: 0.8,       // Min seconds between hand spawns within a wave
+  S3_HAND_IDLE_MAX: 2.0,       // Max seconds between hand spawns
+  S3_WAVE_BREAK: 3.0,          // Seconds break between waves
+  S3_HAND_HP: 1,               // Hits to swat a hand away
+  S3_HAND_STEAL: 20,           // Oil stolen if a hand grabs an ingredient
+  S3_HAND_SPEED_MULT: [1.0, 1.2, 1.5], // Hands get faster each wave
+  S3_OIL_DRAIN_MULT: 0.2,      // S3 oil drain is gentle (you're the chef now)
 
   // ─── Upgrade Shop (Watson: "every subsystem has to be fun") ───
   UPGRADES: {
