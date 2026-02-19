@@ -12,6 +12,16 @@
 - Wave breaks with oil regen between waves.
 - Removed rectangular canvas, station system, order cards, kitchen hazards.
 
+### Bugfixes (Code Audit)
+- **Fixed S3 toss broken on touch/click/keyboard**: Touch/click now tosses in S3 (swat is via Enter key or phone shake). Previously S3 was unplayable on desktop.
+- **Fixed speedBoost upgrade doing nothing**: `getUpgradeBonus('speedBoost')` now applied to tilt physics in both S1/S2 and S3.
+- **Fixed wave speed off-by-one**: Wave 1 now correctly uses 1.0× speed (was accidentally 1.2×).
+- **Fixed S3 shrimp position not reset**: Shrimp now centers in wok when S3 starts (was carried over from S2 edge position).
+- **Fixed `drawS3()` never clearing canvas**: Added full-canvas clear to prevent stale pixel artifacts outside the wok.
+- **Fixed oil bar overflow**: Bar now clamps to 100% even with `oilCapacity` upgrade bonus.
+- **Fixed S3 screen flash using DPR-scaled coords**: Now uses `WOK.size` consistently.
+- **Added oil reward for swatting**: +8 oil per swat, making S3 economy survivable.
+
 ### Sensor Debug Fix
 - `updateSensorDebug()` now runs on **all screens** (title, calibrate, transitions) — not just during active gameplay.
 - Shows "no events yet (desktop?)" when no sensor data has been received.

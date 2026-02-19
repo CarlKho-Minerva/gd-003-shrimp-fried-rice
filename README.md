@@ -72,7 +72,7 @@ Forwarding    https://abcd-12-34-56-78.ngrok-free.app -> http://localhost:8080
 - The ngrok URL works from **anywhere in the world** — just send the link.
 - Keep the `ngrok http 8080` terminal running on your Mac.
 - Free ngrok sessions expire after ~2 hours; restart if needed.
-- For a permanent URL, consider deploying to **itch.io** (see below).
+- For a permanent URL, consider deploying to **itch.io** (see below), or see **[HOSTING.md](HOSTING.md)** for step-by-step guides for Vercel, Netlify, Cloudflare Pages, GitHub Pages, and itch.io.
 
 ### Hosting on itch.io
 1.  Zip the `build/` folder contents (index.html, game.js, config.js, style.css).

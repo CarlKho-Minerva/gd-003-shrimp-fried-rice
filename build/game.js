@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════
- *  GAME.JS — Shrimp Fried Rice — v0.4.0
+ *  GAME.JS — Shrimp Fried Rice — v0.5.0
  *  GDC Alt. Ctrl. Prototype
  *  Hardware target: Wok + IMU (Arduino/ESP32) + Piezo
  *  This build:  Phone tilt + shake via browser sensors
@@ -357,14 +357,14 @@ canvas.addEventListener('touchstart', e => {
   e.preventDefault();
   if (!gameRunning) return;
   if (stage === STAGE.S2 && chef.state === 'holding') { attemptSwat(); return; }
-  if (stage === STAGE.S3) { attemptS3Swat(); return; }
+  if (stage === STAGE.S3) { if (!shrimp.airborne) tossShrimp(); return; }
   if (!shrimp.airborne) tossShrimp();
 }, { passive: false });
 
 window.addEventListener('mousedown', () => {
   if (!gameRunning) return;
   if (stage === STAGE.S2 && chef.state === 'holding') { attemptSwat(); return; }
-  if (stage === STAGE.S3) { attemptS3Swat(); return; }
+  if (stage === STAGE.S3) { if (!shrimp.airborne) tossShrimp(); return; }
   if (!shrimp.airborne) tossShrimp();
 });
 
@@ -373,7 +373,7 @@ window.addEventListener('keydown', e => {
   keys[e.code] = true;
   if (e.code === 'Space' && gameRunning) {
     if (stage === STAGE.S2 && chef.state === 'holding') attemptSwat();
-    else if (stage === STAGE.S3) attemptS3Swat();
+    else if (stage === STAGE.S3) { if (!shrimp.airborne) tossShrimp(); }
     else if (!shrimp.airborne) tossShrimp();
   }
   if (e.code === 'Enter' && gameRunning && (stage === STAGE.S2 || stage === STAGE.S3)) {
@@ -664,11 +664,8 @@ function renderUpgradeShop() {
 }
 
 function applyUpgrades() {
-  // Jump height: increase AIR_DURATION
-  // Temp resist: slow burn rate
-  // Oil capacity: increase OIL_MAX (effective)
-  // Speed boost: increase tilt sensitivity
-  // These are applied dynamically in the update loop
+  // Most upgrades read via getUpgradeBonus() in the update loop.
+  // Nothing to pre-compute here.
 }
 
 function getUpgradeBonus(key) {
@@ -708,7 +705,7 @@ function initS3() {
 }
 
 function spawnS3Hand() {
-  const speedMult = CFG.S3_HAND_SPEED_MULT[Math.min(s3.wave, CFG.S3_HAND_SPEED_MULT.length - 1)];
+  const speedMult = CFG.S3_HAND_SPEED_MULT[Math.min(s3.wave - 1, CFG.S3_HAND_SPEED_MULT.length - 1)];
   const angle = Math.random() * Math.PI * 2;
   s3.hands.push({
     angle: angle,
@@ -731,6 +728,14 @@ function startS3() {
 
   // Restore circular canvas (same as S1/S2)
   resize();
+
+  // Center shrimp in the wok for S3
+  shrimp.x = WOK.cx();
+  shrimp.y = WOK.cy();
+  shrimp.vx = 0;
+  shrimp.vy = 0;
+  shrimp.airborne = false;
+  shrimp.scale = 1;
 
   initS3();
   showHUD();
@@ -989,10 +994,11 @@ function update() {
 
   // ─── Shrimp physics (S1/S2 only — S3 handles its own) ───
   if (stage !== STAGE.S3) {
+  const speedMul = 1 + getUpgradeBonus('speedBoost');
   if (!shrimp.airborne) {
     currentDrag = 0.75 + (0.13 * (oilLevel / CFG.OIL_MAX));
-    shrimp.vx += tiltX * CFG.GRAVITY * 60 * dt;
-    shrimp.vy += tiltY * CFG.GRAVITY * 60 * dt;
+    shrimp.vx += tiltX * CFG.GRAVITY * speedMul * 60 * dt;
+    shrimp.vy += tiltY * CFG.GRAVITY * speedMul * 60 * dt;
     if (Math.abs(shrimp.vx) > 0.1 || Math.abs(shrimp.vy) > 0.1) shrimp.angle = Math.atan2(shrimp.vy, shrimp.vx);
     const speed = Math.sqrt(shrimp.vx ** 2 + shrimp.vy ** 2);
     shrimp.wobble = Math.sin(gameTime * 15) * Math.min(speed * 0.1, 0.5);
@@ -1144,7 +1150,8 @@ function updateHUD() {
 
   const oilBar = $('oil-bar'), oilLabel = $('oil-label');
   if (oilLevel > 0) {
-    oilBar.style.width = `${(oilLevel / CFG.OIL_MAX) * 100}%`;
+    const maxOil = CFG.OIL_MAX + getUpgradeBonus('oilCapacity');
+    oilBar.style.width = `${Math.min(100, (oilLevel / maxOil) * 100)}%`;
     oilBar.style.background = oilLevel > 60 ? '#44ff44' : oilLevel > 25 ? '#ffd700' : '#ff4444';
     oilBar.style.boxShadow = '0 0 10px currentColor';
     oilLabel.textContent = 'OIL LEVEL';
@@ -1436,7 +1443,10 @@ function attemptS3Swat() {
         h.state = 'swatted';
         h.stateTimer = 0.3;
         s3.handsSwatted++;
-        spawnPopup(h.handX, h.handY, '💥 SWAT!', '#ff4444');
+        // Reward: recover some oil per swat (keeps economy survivable)
+        const oilReward = 8;
+        oilLevel = Math.min(CFG.OIL_MAX + getUpgradeBonus('oilCapacity'), oilLevel + oilReward);
+        spawnPopup(h.handX, h.handY, '💥 SWAT! +' + oilReward + '🫧', '#ff4444');
         for (let j = 0; j < 15; j++) spawnParticle(h.handX, h.handY, '#ff6666', 10, 4);
       } else {
         spawnPopup(h.handX, h.handY, '✋ HIT!', '#ffaa44');
@@ -1456,11 +1466,12 @@ function attemptS3Swat() {
 }
 
 function updateS3(dt) {
-  // ── Shrimp physics (same wok, same controls) ──
+  // ── Shrimp physics (same wok, same controls + speed upgrade) ──
+  const speedMul = 1 + getUpgradeBonus('speedBoost');
   if (!shrimp.airborne) {
     currentDrag = 0.75 + (0.13 * (oilLevel / CFG.OIL_MAX));
-    shrimp.vx += tiltX * CFG.GRAVITY * 60 * dt;
-    shrimp.vy += tiltY * CFG.GRAVITY * 60 * dt;
+    shrimp.vx += tiltX * CFG.GRAVITY * speedMul * 60 * dt;
+    shrimp.vy += tiltY * CFG.GRAVITY * speedMul * 60 * dt;
     if (Math.abs(shrimp.vx) > 0.1 || Math.abs(shrimp.vy) > 0.1) shrimp.angle = Math.atan2(shrimp.vy, shrimp.vx);
     const speed = Math.sqrt(shrimp.vx ** 2 + shrimp.vy ** 2);
     shrimp.wobble = Math.sin(gameTime * 15) * Math.min(speed * 0.1, 0.5);
@@ -1614,6 +1625,10 @@ function updateS3(dt) {
 function drawS3() {
   const cx = WOK.cx(), cy = WOK.cy(), r = WOK.radius();
 
+  // Clear full canvas (prevent stale pixel artifacts outside the wok)
+  ctx.fillStyle = '#0a0a10';
+  ctx.fillRect(0, 0, WOK.size, WOK.size);
+
   ctx.save();
   ctx.translate(screenShake.x, screenShake.y);
 
@@ -1686,7 +1701,7 @@ function drawS3() {
   // Screen flash
   if (screenFlash > 0) {
     ctx.fillStyle = `rgba(255,255,255,${Math.max(0, screenFlash)})`;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, WOK.size, WOK.size);
   }
 }
 
