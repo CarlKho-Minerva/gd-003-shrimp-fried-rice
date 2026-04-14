@@ -18,6 +18,16 @@ const { WebSocketServer } = require('ws');
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const BUILD_DIR = path.join(__dirname, 'build');
 
+// ── In-memory Leaderboard ──
+const DEFAULT_SCORES = [
+  { name: 'YUKI',   time: 28, stage: 1 },
+  { name: 'CARL',   time: 34, stage: 1 },
+  { name: 'WATSON', time: 41, stage: 1 },
+  { name: 'SHRIMP', time: 55, stage: 1 },
+  { name: 'WOK',    time: 72, stage: 1 },
+];
+let serverScores = DEFAULT_SCORES.map(s => ({ ...s }));
+
 // ── MIME Types ──
 const MIME = {
   '.html': 'text/html',
@@ -36,6 +46,42 @@ const server = http.createServer((req, res) => {
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('ok');
+    return;
+  }
+
+  // Shared leaderboard — GET /scores
+  if (req.url === '/scores' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+    res.end(JSON.stringify(serverScores.sort((a, b) => a.time - b.time).slice(0, 10)));
+    return;
+  }
+
+  // Shared leaderboard — POST /scores  { name, time, stage }
+  if (req.url === '/scores' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const entry = JSON.parse(body);
+        const name  = String(entry.name  || 'SHRIMP').toUpperCase().slice(0, 8);
+        const time  = Math.round(Number(entry.time)  || 999);
+        const stage = Number(entry.stage) || 1;
+        serverScores.push({ name, time, stage });
+        serverScores.sort((a, b) => a.time - b.time);
+        if (serverScores.length > 50) serverScores = serverScores.slice(0, 50);
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch {
+        res.writeHead(400); res.end('Bad Request');
+      }
+    });
+    return;
+  }
+
+  // CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST', 'Access-Control-Allow-Headers': 'Content-Type' });
+    res.end();
     return;
   }
 

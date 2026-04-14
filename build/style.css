@@ -619,6 +619,35 @@ button.secondary:active {
   transform: translateY(4px);
   box-shadow: 0 1px 0 rgba(0,0,0,.45), 0 2px 0 rgba(0,0,0,.6);
 }
+/* Active state — status badge, not a button */
+.btn-relay--active,
+.btn-relay--active:hover,
+.btn-relay--active:active {
+  background: rgba(76,217,100,.12);
+  border-color: rgba(76,217,100,.45);
+  color: #4cd964;
+  box-shadow: none;
+  transform: none;
+  cursor: default;
+  pointer-events: none;
+  padding-left: 28px;
+  position: relative;
+}
+.btn-relay--active::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: 50%; transform: translateY(-50%);
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #4cd964;
+  box-shadow: 0 0 6px #4cd964;
+  animation: pulse-dot 1.8s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px #4cd964; }
+  50%       { opacity: 0.5; box-shadow: 0 0 12px #4cd964; }
+}
 
 /* ─── Title leaderboard preview (home screen) ─── */
 .score-card-stack {

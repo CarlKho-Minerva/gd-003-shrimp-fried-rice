@@ -832,6 +832,18 @@ function loadScores() {
     highScores = CFG.DEFAULT_SCORES.map(s => ({ ...s }));
   }
   sortScores();
+  // On Render (non-localhost), also fetch server-side shared scores
+  if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+    fetch('/scores').then(r => r.json()).then(serverScores => {
+      // Merge server scores with local, deduplicate by name+time, keep best 10
+      const seen = new Set(highScores.map(s => s.name + s.time));
+      for (const s of serverScores) {
+        if (!seen.has(s.name + s.time)) { highScores.push(s); seen.add(s.name + s.time); }
+      }
+      sortScores();
+      updateHighScorePreview();
+    }).catch(() => {});
+  }
 }
 
 function sortScores() {
@@ -864,6 +876,14 @@ function saveScore(name, time, stageNum) {
   highScores.push({ name: name.toUpperCase().slice(0, 8), time: Math.round(time), stage: stageNum });
   sortScores();
   saveScoresToStorage();
+  // Also post to shared server leaderboard when on Render
+  if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+    fetch('/scores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.toUpperCase().slice(0, 8), time: Math.round(time), stage: stageNum })
+    }).catch(() => {});
+  }
 }
 
 function getBestScore() {
@@ -1010,7 +1030,7 @@ function connectToRelay(host) {
   };
 
   relayWS.onerror = () => {
-    if (btn) { btn.textContent = 'GENERATE ROOM CODE'; btn.disabled = false; }
+    if (btn) { btn.textContent = 'GENERATE ROOM CODE'; btn.disabled = false; btn.classList.remove('btn-relay--active'); }
     const box = $('relay-box');
     if (box) {
       box.style.display = 'block';
@@ -1023,7 +1043,7 @@ function connectToRelay(host) {
   };
 
   relayWS.onclose = () => {
-    if (!relayRoom && btn) { btn.textContent = 'GENERATE ROOM CODE'; btn.disabled = false; }
+    if (!relayRoom && btn) { btn.textContent = 'GENERATE ROOM CODE'; btn.disabled = false; btn.classList.remove('btn-relay--active'); }
   };
 
   relayWS.onmessage = (e) => {
@@ -1031,7 +1051,7 @@ function connectToRelay(host) {
 
     if (msg.type === 'room') {
       relayRoom = msg.code;
-      if (btn) { btn.textContent = 'ROOM ACTIVE'; }
+      if (btn) { btn.textContent = 'ROOM ACTIVE'; btn.disabled = false; btn.classList.add('btn-relay--active'); }
       $('relay-code-display').textContent = msg.code;
       $('relay-code-display').style.color = '#4cd964';
       $('relay-code-display').style.textShadow = '2px 2px 0 rgba(0,0,0,0.7), 0 0 20px rgba(76,217,100,0.4)';
@@ -1276,6 +1296,13 @@ function startTutorial(desktop = false) {
 }
 
 function nextTutorialStep() {
+  // During step 3: button advances sub-phase, not the whole step
+  if (tutorialStep === 3 && tutStep3Phase < 2) {
+    if (tutStep3Timer) { clearTimeout(tutStep3Timer); tutStep3Timer = null; }
+    showStep3Phase(tutStep3Phase + 1);
+    return;
+  }
+
   // Stop any active feedback from the current step
   stopTutTiltFeedback();
   stopTutItemsFeedback();
@@ -1322,8 +1349,8 @@ function updateTutorialUI() {
     if (btn) { btn.style.display = 'block'; btn.innerHTML = 'NEXT'; }
     startTutFlickFeedback();
   } else if (tutorialStep === 3) {
-    // Individual objective cards — auto-advance every 4 seconds
-    if (btn) btn.style.display = 'none'; // no NEXT button during step 3
+    // Individual objective cards — auto-advance every 4 seconds, skip button visible
+    if (btn) { btn.style.display = 'block'; btn.innerHTML = 'SKIP →'; }
     tutStep3Phase = 0;
     showStep3Phase(0);
     startTutItemsFeedback();
@@ -1369,6 +1396,10 @@ function showStep3Phase(phase) {
     const titles = ['COLLECT MSG', 'OIL = HEALTH', 'AVOID DANGER'];
     h2.textContent = titles[phase] || 'THE GOAL';
   }
+
+  // Update skip button label (last phase → button becomes "NEXT →")
+  const btn = $('tut-next-btn');
+  if (btn) btn.innerHTML = phase < 2 ? 'SKIP →' : 'NEXT →';
 
   // Auto-advance to next phase or next tutorial step
   if (tutStep3Timer) clearTimeout(tutStep3Timer);
@@ -1568,8 +1599,8 @@ function startTransition() {
   stage = STAGE.TRANSITION;
   gameRunning = false;
   obstacles = [];
-  // Show name entry for Stage 1 score before transition cutscene
-  showNameEntry(true);
+  // Stage 1 complete — show name entry then leaderboard (single-stage release)
+  showNameEntry(false);
 }
 
 function _doTransition() {
@@ -2054,8 +2085,9 @@ function update() {
     shrimp.airTime -= dt;
     const prog = 1 - (shrimp.airTime / CFG.AIR_DURATION);
     shrimp.scale = 1 + Math.sin(prog * Math.PI) * 1.5;
-    shrimp.vx *= 0.85; // friction-only during jump — no tilt drift
-    shrimp.vy *= 0.85;
+    shrimp.vx *= 0.96; // mostly locked but tiny drift gives arc feel
+    shrimp.vx += tiltX * 0.35; // very light tilt influence during flight
+    shrimp.vy *= 0.96;
     shrimp.x += shrimp.vx; shrimp.y += shrimp.vy;
     const dx = shrimp.x - WOK.cx(), dy = shrimp.y - WOK.cy(), d = Math.sqrt(dx * dx + dy * dy);
     if (d > WOK.radius() - shrimp.radius) {
@@ -2283,12 +2315,17 @@ function draw() {
   for (const m of oilItems) {
     if (m.collected) continue;
     const bob = Math.sin(gameTime * 3 + m.bob) * 4;
+    const breathe = 1 + 0.06 * Math.sin(gameTime * 2.8 + m.bob);
+    ctx.save();
+    ctx.translate(m.x, m.y + bob);
+    ctx.scale(breathe, breathe);
     ctx.shadowBlur = 15; ctx.shadowColor = '#ffd700';
     ctx.fillStyle = '#ffaa00';
-    ctx.beginPath(); ctx.arc(m.x, m.y + bob, m.radius * 0.55, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, m.radius * 0.55, 0, Math.PI * 2); ctx.fill();
     ctx.shadowBlur = 0;
     ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.arc(m.x - m.radius * 0.15, m.y + bob - m.radius * 0.2, m.radius * 0.12, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-m.radius * 0.15, -m.radius * 0.2, m.radius * 0.12, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
   }
 
   // MSG crystals
@@ -2308,7 +2345,8 @@ function draw() {
       ctx.beginPath(); ctx.arc(m.x, m.y + bob, m.radius * 2.2, 0, Math.PI * 2); ctx.stroke();
       ctx.restore();
     }
-    ctx.save(); ctx.translate(m.x, m.y + bob); ctx.rotate(gameTime * 2 + m.bob);
+    const breathe = 1 + 0.07 * Math.sin(gameTime * 2.5 + m.bob);
+    ctx.save(); ctx.translate(m.x, m.y + bob); ctx.rotate(gameTime * 2 + m.bob); ctx.scale(breathe, breathe);
     const shadowSize = (mDist < proximityRange && !shrimp.airborne) ? 30 : 20;
     ctx.shadowBlur = shadowSize; ctx.shadowColor = '#ffffff';
     ctx.fillStyle = '#fff';
@@ -2598,8 +2636,9 @@ function updateS3(dt) {
     shrimp.airTime -= dt;
     const prog = 1 - (shrimp.airTime / CFG.AIR_DURATION);
     shrimp.scale = 1 + Math.sin(prog * Math.PI) * 1.5;
-    shrimp.vx *= 0.85; // friction-only during jump — no tilt drift
-    shrimp.vy *= 0.85;
+    shrimp.vx *= 0.96; // mostly locked but tiny drift gives arc feel
+    shrimp.vx += tiltX * 0.35; // very light tilt influence during flight
+    shrimp.vy *= 0.96;
     shrimp.x += shrimp.vx; shrimp.y += shrimp.vy;
     const dx = shrimp.x - WOK.cx(), dy = shrimp.y - WOK.cy(), d = Math.sqrt(dx * dx + dy * dy);
     if (d > WOK.radius() - shrimp.radius) {
