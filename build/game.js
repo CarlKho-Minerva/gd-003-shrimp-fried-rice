@@ -14,8 +14,35 @@ const ctx = canvas.getContext('2d');
 
 /* ═══ AUDIO ENGINE (Procedural — no files) ═══ */
 let audioCtx = null;
+let sizzleNode = null;
+let sizzleGain = null;
+
+function initSizzle() {
+  if (sizzleNode) return;
+  const sr = audioCtx.sampleRate;
+  const buf = audioCtx.createBuffer(1, sr * 2, sr);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  sizzleNode = audioCtx.createBufferSource();
+  sizzleNode.buffer = buf;
+  sizzleNode.loop = true;
+
+  const filt = audioCtx.createBiquadFilter();
+  filt.type = 'highpass';
+  filt.frequency.value = 1400;
+
+  sizzleGain = audioCtx.createGain();
+  sizzleGain.gain.value = 0;
+
+  sizzleNode.connect(filt).connect(sizzleGain).connect(audioCtx.destination);
+  sizzleNode.start();
+}
+
 function ensureAudio() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    initSizzle();
+  }
   if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
@@ -172,6 +199,7 @@ let hasDeviceOrientation = false;
 let lastAccel = { x: 0, y: 0, z: 0 };
 let accelMagnitude = 0;
 let keys = {};
+let sensorsSetup = false; // guard against double event-listener registration
 
 // Sensor debug
 let sensorDebug = {
@@ -184,6 +212,12 @@ let sensorDebug = {
   hasOrientation: false,
   hasMotion: false,
 };
+
+// WebSocket Relay
+let relayWS = null;
+let relayRoom = null;
+let remoteControllerCount = 0;
+
 
 // Upgrades (Watson: "buy upgrades with MSG and oil")
 let upgrades = {
@@ -221,7 +255,7 @@ let bgParticles = [];
 const $ = id => document.getElementById(id);
 
 function hideAllScreens() {
-  ['title-screen','calibration-screen','transition-screen','transition2-screen','upgrade-screen','gameover-screen','victory-screen'].forEach(id => $(id).style.display = 'none');
+  ['title-screen','tutorial-screen','calibration-screen','transition-screen','transition2-screen','upgrade-screen','gameover-screen','victory-screen','name-entry-screen','scores-screen'].forEach(id => $(id).style.display = 'none');
   $('hud').style.display = 'none';
   $('oil-label').style.display = 'none';
   $('oil-bar-wrap').style.display = 'none';
@@ -229,8 +263,16 @@ function hideAllScreens() {
   $('chef-bar-wrap').style.display = 'none';
   $('s3-hud').style.display = 'none';
   $('stage-announce').style.opacity = '0';
+  const mc = $('mini-ctrl-canvas'); if (mc) mc.style.display = 'none';
   document.body.classList.remove('burn-pulse');
   document.body.classList.remove('stage3-active');
+}
+
+function updateDbgVisibility() {
+  const dbgBtn = $('debug-toggle');
+  if (!dbgBtn) return;
+  const inGame = stage === STAGE.S1 || stage === STAGE.S2 || stage === STAGE.S3;
+  dbgBtn.style.display = inGame ? 'none' : 'flex';
 }
 
 function showScreen(id) { hideAllScreens(); if (id) $(id).style.display = 'flex'; }
@@ -239,6 +281,7 @@ function showHUD() {
   $('hud').style.display = 'flex';
   $('oil-label').style.display = 'block';
   $('oil-bar-wrap').style.display = 'block';
+  const mc = $('mini-ctrl-canvas'); if (mc) mc.style.display = 'block';
 }
 
 function showChefBar() {
@@ -266,12 +309,24 @@ function spawnPopup(worldX, worldY, text, color = '#ffd700') {
   setTimeout(() => popup.remove(), 800);
 }
 
+let phoneStatusTimer;
 function updatePhoneStatus(mode) {
   const el = $('phone-status');
-  el.style.display = 'block';
-  el.className = '';
-  if (mode === 'phone') { el.textContent = '📱 Sensors Connected'; el.classList.add('connected'); }
-  else { el.textContent = '🖱️ Mouse/Keyboard'; el.classList.add('desktop'); }
+  if (mode === 'none') { el.className = ''; el.textContent = ''; return; }
+
+  if (remoteControllerCount > 0) {
+    el.textContent = `Controllers: ${remoteControllerCount}`;
+    el.className = 'connected';
+  } else if (mode === 'phone') {
+    el.textContent = 'Sensors Connected';
+    el.classList.add('connected');
+  } else {
+    el.textContent = 'Mouse / Keyboard';
+    el.classList.add('desktop');
+  }
+
+  clearTimeout(phoneStatusTimer);
+  phoneStatusTimer = setTimeout(() => { el.className = ''; el.textContent = ''; }, 4000);
 }
 
 /* ═══ CANVAS RESIZE ═══ */
@@ -292,43 +347,749 @@ resize();
 
 /* ═══ INPUT HANDLERS ═══ */
 function setupDeviceOrientation() {
+  if (sensorsSetup) return;
   window.addEventListener('deviceorientation', e => {
+    // Ignore local sensors if we have a remote controller active
+    if (remoteControllerCount > 0) return;
+
     if (e.gamma === null || e.beta === null) return;
     hasDeviceOrientation = true;
     sensorDebug.hasOrientation = true;
     sensorDebug.orient = { alpha: e.alpha || 0, beta: e.beta || 0, gamma: e.gamma || 0 };
-    tiltX = Math.max(-1, Math.min(1, (e.gamma || 0) / 45));
-    tiltY = Math.max(-1, Math.min(1, (e.beta || 0) / 45));
+    tiltX = Math.max(-1, Math.min(1, (e.gamma || 0) / 60)); // reduced X sensitivity
+    tiltY = Math.max(-1, Math.min(1, (e.beta || 0) / 28)); // more sensitive forward lean
     updatePhoneStatus('phone');
   });
 }
 
+function processMotion(a) {
+  sensorDebug.hasMotion = true;
+  sensorDebug.accel = { x: a.x || 0, y: a.y || 0, z: a.z || 0 };
+  const dx = a.x - lastAccel.x, dy = a.y - lastAccel.y, dz = a.z - lastAccel.z;
+  accelMagnitude = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  sensorDebug.mag = accelMagnitude;
+  lastAccel = { x: a.x, y: a.y, z: a.z };
+
+  // Tutorial step 2: update flick bar live
+  if (tutorialStep === 2) updateTutFlickFeedback();
+
+  // Calibration mode (handles both standalone screen and tutorial step 4)
+  if (calibration.active) {
+    handleCalibrationFlick(accelMagnitude);
+    return;
+  }
+
+  if (!gameRunning) return;
+
+  if (accelMagnitude > calibration.swatThreshold) {
+    if (stage === STAGE.S2) attemptSwat();
+    else if (stage === STAGE.S3) attemptS3Swat();
+  } else if (accelMagnitude > calibration.tossThreshold && !shrimp.airborne) {
+    tossShrimp();
+  }
+}
+
 function setupDeviceMotion() {
+  if (sensorsSetup) return;
   window.addEventListener('devicemotion', e => {
+    // Ignore local sensors if we have a remote controller active
+    if (remoteControllerCount > 0) return;
+
     const a = e.accelerationIncludingGravity;
     if (!a) return;
-    sensorDebug.hasMotion = true;
-    sensorDebug.accel = { x: a.x || 0, y: a.y || 0, z: a.z || 0 };
-    const dx = a.x - lastAccel.x, dy = a.y - lastAccel.y, dz = a.z - lastAccel.z;
-    accelMagnitude = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    sensorDebug.mag = accelMagnitude;
-    lastAccel = { x: a.x, y: a.y, z: a.z };
-
-    // Calibration mode
-    if (calibration.active) {
-      handleCalibrationFlick(accelMagnitude);
-      return;
-    }
-
-    if (!gameRunning) return;
-
-    if (accelMagnitude > calibration.swatThreshold) {
-      if (stage === STAGE.S2) attemptSwat();
-      else if (stage === STAGE.S3) attemptS3Swat();
-    } else if (accelMagnitude > calibration.tossThreshold && !shrimp.airborne) {
-      tossShrimp();
-    }
+    processMotion(a);
   });
+}
+
+/* ═══ SENSOR EARLY-SETUP (Tutorial step 1 gesture) ═══ */
+// Request permissions and start listeners without triggering calibration.
+// Called on the NEXT tap advancing to tutorial step 1 so iOS has a user gesture.
+function requestSensorsEarly() {
+  if (sensorsSetup) return;
+
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    sensorDebug.device = sensorDebug.device || 'iOS';
+    Promise.all([
+      DeviceOrientationEvent.requestPermission(),
+      typeof DeviceMotionEvent.requestPermission === 'function'
+        ? DeviceMotionEvent.requestPermission()
+        : Promise.resolve('granted')
+    ]).then(([orientPerm, motionPerm]) => {
+      sensorDebug.permission = `orient:${orientPerm} motion:${motionPerm}`;
+      if (orientPerm === 'granted' && motionPerm === 'granted') {
+        setupDeviceOrientation();
+        setupDeviceMotion();
+        sensorsSetup = true;
+      } else {
+        // Permission denied — fall back to desktop mode for step 4
+        isDesktop = true;
+        const btn = $('tut-next-btn');
+        if (btn) { btn.style.display = 'block'; btn.innerHTML = 'LET\'S COOK'; }
+      }
+    }).catch(err => {
+      console.warn('[Sensor] Early permission error:', err);
+      isDesktop = true;
+    });
+  } else {
+    // Android / desktop: no permission API
+    setupDeviceOrientation();
+    setupDeviceMotion();
+    sensorsSetup = true;
+  }
+}
+
+/* ═══ TUTORIAL LIVE FEEDBACK ═══ */
+
+// Step 1 — live tilt preview canvas
+let tutTiltAnimId = null;
+let tutTiltDetected = false;
+let tutTiltPhase = 'hold'; // 'hold' | 'tilt' | 'detected'
+let tutStillTimer = 0;
+let tutAutoAdvanceTimer = 0; // auto-advance even without sensor
+const TUT_STILL_NEEDED = 0.9; // seconds of stillness to advance phase
+const TUT_AUTO_ADVANCE = 3.0; // max seconds before auto-advancing anyway
+const TUT_STILL_THRESH = 0.08;
+const TUT_TILT_THRESH  = 0.15;
+
+function startTutTiltFeedback() {
+  tutTiltDetected = false;
+  tutTiltPhase = isDesktop ? 'tilt' : 'hold';
+  tutStillTimer = 0;
+  const tutCanvas = $('tut-tilt-canvas');
+  if (!tutCanvas) return;
+  const ctx2 = tutCanvas.getContext('2d');
+  // Set initial heading + text for the current phase
+  const titleEl = $('tut-step-1-title');
+  const textEl = $('tut-step-1-text');
+  const nudge = $('tut-tilt-nudge');
+  tutAutoAdvanceTimer = 0;
+  if (isDesktop) {
+    if (titleEl) titleEl.textContent = 'TILT';
+    if (textEl) textEl.innerHTML = '<strong>Arrow keys</strong> or <strong>WASD</strong> to slide the shrimp.';
+    if (nudge) { nudge.textContent = ''; nudge.style.color = ''; }
+  } else {
+    if (titleEl) titleEl.textContent = 'HOLD';
+    if (textEl) textEl.innerHTML = 'Hold your phone <strong>flat and still</strong>.';
+    if (nudge) { nudge.textContent = ''; nudge.style.color = ''; }
+  }
+  let lastFrameTime = performance.now();
+  function frame() {
+    if (tutorialStep !== 1) return;
+    tutTiltAnimId = requestAnimationFrame(frame);
+    const now = performance.now();
+    const dt = Math.min((now - lastFrameTime) / 1000, 0.1);
+    lastFrameTime = now;
+    const W = tutCanvas.width, H = tutCanvas.height;
+    const cx = W / 2, cy = H / 2, r = cx - 6;
+    ctx2.clearRect(0, 0, W, H);
+    // Wok circle background
+    ctx2.fillStyle = '#1a1a24';
+    ctx2.beginPath(); ctx2.arc(cx, cy, r, 0, Math.PI * 2); ctx2.fill();
+    ctx2.strokeStyle = 'rgba(255,255,255,0.12)'; ctx2.lineWidth = 2;
+    ctx2.beginPath(); ctx2.arc(cx, cy, r, 0, Math.PI * 2); ctx2.stroke();
+    // Center crosshair guide
+    ctx2.strokeStyle = 'rgba(255,255,255,0.06)'; ctx2.lineWidth = 1;
+    ctx2.beginPath(); ctx2.moveTo(cx - r, cy); ctx2.lineTo(cx + r, cy); ctx2.stroke();
+    ctx2.beginPath(); ctx2.moveTo(cx, cy - r); ctx2.lineTo(cx, cy + r); ctx2.stroke();
+    // "Hold still" phase: draw pulse ring at center to guide player
+    if (tutTiltPhase === 'hold') {
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 400);
+      ctx2.strokeStyle = `rgba(247,201,72,${0.25 + pulse * 0.35})`;
+      ctx2.lineWidth = 2;
+      ctx2.beginPath(); ctx2.arc(cx, cy, 18 + pulse * 6, 0, Math.PI * 2); ctx2.stroke();
+    }
+    // Shrimp dot position based on tilt
+    const dotX = cx + tiltX * (r * 0.72);
+    const dotY = cy + tiltY * (r * 0.72);
+    // Glow trail
+    ctx2.fillStyle = 'rgba(255,107,53,0.12)';
+    ctx2.beginPath(); ctx2.arc(dotX, dotY, 18, 0, Math.PI * 2); ctx2.fill();
+    // Shrimp body
+    ctx2.fillStyle = '#ff8844';
+    ctx2.beginPath(); ctx2.arc(dotX, dotY, 10, 0, Math.PI * 2); ctx2.fill();
+    ctx2.fillStyle = '#fff';
+    ctx2.beginPath(); ctx2.arc(dotX + 3, dotY - 3, 3, 0, Math.PI * 2); ctx2.fill();
+    // Phase progression
+    const nudgeEl = $('tut-tilt-nudge');
+    const isStill = Math.abs(tiltX) < TUT_STILL_THRESH && Math.abs(tiltY) < TUT_STILL_THRESH;
+    const isTilting = Math.abs(tiltX) > TUT_TILT_THRESH || Math.abs(tiltY) > TUT_TILT_THRESH;
+    if (tutTiltPhase === 'hold') {
+      tutAutoAdvanceTimer += dt;
+      if (isStill) { tutStillTimer += dt; } else { tutStillTimer = 0; }
+      if (tutStillTimer >= TUT_STILL_NEEDED || tutAutoAdvanceTimer >= TUT_AUTO_ADVANCE) {
+        tutTiltPhase = 'tilt';
+        tutAutoAdvanceTimer = 0;
+        // Swap heading and text
+        const h2 = $('tut-step-1-title');
+        const p = $('tut-step-1-text');
+        if (h2) h2.textContent = 'TILT';
+        if (p) p.innerHTML = 'Tilt to <strong>slide the shrimp</strong>.';
+        if (nudgeEl) { nudgeEl.textContent = ''; nudgeEl.style.color = ''; }
+      }
+    } else if (tutTiltPhase === 'tilt') {
+      tutAutoAdvanceTimer += dt;
+      if (isTilting || tutAutoAdvanceTimer >= TUT_AUTO_ADVANCE) {
+        tutTiltPhase = 'detected';
+        tutTiltDetected = true;
+        if (nudgeEl) { nudgeEl.textContent = isTilting ? 'Tilt detected!' : 'Tilt your phone to play!'; nudgeEl.style.color = '#4cd964'; }
+      }
+    }
+  }
+  tutTiltAnimId = requestAnimationFrame(frame);
+}
+
+function stopTutTiltFeedback() {
+  if (tutTiltAnimId) { cancelAnimationFrame(tutTiltAnimId); tutTiltAnimId = null; }
+}
+
+// Step 2 — live flick magnitude bar (updated in processMotion)
+let tutFlickDetected = false;
+
+function startTutFlickFeedback() {
+  tutFlickDetected = false;
+  const bar = $('tut-flick-bar');
+  if (bar) { bar.style.width = '0%'; bar.style.background = '#f7c948'; }
+  const nudge = $('tut-flick-nudge');
+  if (nudge) { nudge.textContent = 'Flick your phone upward'; nudge.style.color = ''; }
+}
+
+function updateTutFlickFeedback() {
+  const bar = $('tut-flick-bar');
+  if (!bar) return;
+  const pct = Math.min(100, (accelMagnitude / 30) * 100);
+  bar.style.width = pct + '%';
+  if (!tutFlickDetected && accelMagnitude > calibration.tossThreshold) {
+    tutFlickDetected = true;
+    bar.style.background = '#4cd964';
+    const nudge = $('tut-flick-nudge');
+    if (nudge) { nudge.textContent = 'Flick detected!'; nudge.style.color = '#4cd964'; }
+    setTimeout(() => { if (bar) bar.style.background = '#f7c948'; }, 400);
+  }
+}
+
+// Step 3 — canvas-drawn game elements (MSG crystal, oil drop, red hazard)
+let tutItemsAnimId = null;
+
+function startTutItemsFeedback() {
+  function frame() {
+    if (tutorialStep !== 3) return;
+    tutItemsAnimId = requestAnimationFrame(frame);
+    drawTutorialItems();
+  }
+  tutItemsAnimId = requestAnimationFrame(frame);
+}
+
+function stopTutItemsFeedback() {
+  if (tutItemsAnimId) { cancelAnimationFrame(tutItemsAnimId); tutItemsAnimId = null; }
+}
+
+function drawTutorialItems() {
+  const tutCanvas = $('tut-items-canvas');
+  if (!tutCanvas) return;
+  const ctx2 = tutCanvas.getContext('2d');
+  const W = tutCanvas.width, H = tutCanvas.height;
+  ctx2.clearRect(0, 0, W, H);
+  const t = performance.now() / 1000;
+  const icx = W / 2, icy = H / 2; // centered
+
+  if (tutStep3Phase === 0) {
+    // MSG crystal — white rotating diamond
+    const r = 18;
+    ctx2.save();
+    ctx2.translate(icx, icy + Math.sin(t * 3.5) * 3);
+    ctx2.rotate(t * 2);
+    ctx2.shadowBlur = 20; ctx2.shadowColor = '#fff';
+    ctx2.fillStyle = '#fff';
+    ctx2.beginPath();
+    ctx2.moveTo(0, -r); ctx2.lineTo(r * 0.6, 0); ctx2.lineTo(0, r); ctx2.lineTo(-r * 0.6, 0);
+    ctx2.closePath(); ctx2.fill();
+    ctx2.fillStyle = 'rgba(200,220,255,0.55)';
+    ctx2.beginPath();
+    ctx2.moveTo(0, -r * 0.5); ctx2.lineTo(r * 0.3, 0); ctx2.lineTo(0, r * 0.5); ctx2.lineTo(-r * 0.3, 0);
+    ctx2.closePath(); ctx2.fill();
+    ctx2.shadowBlur = 0;
+    ctx2.restore();
+  } else if (tutStep3Phase === 1) {
+    // Oil drop — yellow orb
+    const r = 16;
+    const bob = Math.sin(t * 3) * 3;
+    ctx2.shadowBlur = 18; ctx2.shadowColor = '#ffd700';
+    ctx2.fillStyle = '#ffaa00';
+    ctx2.beginPath(); ctx2.arc(icx, icy + bob, r, 0, Math.PI * 2); ctx2.fill();
+    ctx2.shadowBlur = 0;
+    ctx2.fillStyle = '#fff';
+    ctx2.beginPath(); ctx2.arc(icx - r * 0.25, icy + bob - r * 0.25, r * 0.22, 0, Math.PI * 2); ctx2.fill();
+  } else if (tutStep3Phase === 2) {
+    // Red hazard — pulsing danger circle
+    const r = 16;
+    const pulse = Math.sin(t * 5) * 0.3 + 0.7;
+    ctx2.strokeStyle = `rgba(255,60,60,${pulse})`; ctx2.lineWidth = 2.5;
+    ctx2.setLineDash([5, 3]);
+    ctx2.beginPath(); ctx2.arc(icx, icy, r, 0, Math.PI * 2); ctx2.stroke();
+    ctx2.setLineDash([]);
+    ctx2.fillStyle = `rgba(255,60,60,${pulse * 0.25})`;
+    ctx2.beginPath(); ctx2.arc(icx, icy, r * 0.65, 0, Math.PI * 2); ctx2.fill();
+    ctx2.strokeStyle = `rgba(255,80,80,${pulse})`; ctx2.lineWidth = 1.5;
+    ctx2.beginPath();
+    ctx2.moveTo(icx - 7, icy); ctx2.lineTo(icx + 7, icy);
+    ctx2.moveTo(icx, icy - 7); ctx2.lineTo(icx, icy + 7);
+    ctx2.stroke();
+  }
+}
+
+/* ═══ TITLE SHRIMP CANVAS ═══ */
+
+let titleShrimpAnimId = null;
+
+function drawStaticShrimp(ctx2, cx, cy, scale, t) {
+  ctx2.save();
+  ctx2.translate(cx, cy);
+  ctx2.scale(scale, scale);
+  const bodyColor = 'rgb(255,140,80)';
+  for (let i = 0; i < 5; i++) {
+    const offset = Math.sin((t || 0) * 3 + i) * 1.5;
+    const sz = 14 * (1 - i * 0.15);
+    ctx2.fillStyle = bodyColor;
+    ctx2.beginPath(); ctx2.arc(-i * 6, offset, sz, 0, Math.PI * 2); ctx2.fill();
+    ctx2.strokeStyle = 'rgba(255,255,255,0.25)'; ctx2.lineWidth = 2; ctx2.stroke();
+  }
+  ctx2.fillStyle = '#111';
+  ctx2.beginPath(); ctx2.arc(4, -4, 3, 0, Math.PI * 2); ctx2.arc(4, 4, 3, 0, Math.PI * 2); ctx2.fill();
+  ctx2.fillStyle = '#fff';
+  ctx2.beginPath(); ctx2.arc(5, -5, 1, 0, Math.PI * 2); ctx2.arc(5, 3, 1, 0, Math.PI * 2); ctx2.fill();
+  ctx2.restore();
+}
+
+function startTitleShrimp() {
+  const c = $('title-shrimp');
+  if (!c) return;
+  if (titleShrimpAnimId) return; // already running
+  const ctx2 = c.getContext('2d');
+  function frame() {
+    titleShrimpAnimId = requestAnimationFrame(frame);
+    const t = performance.now() / 1000;
+    ctx2.clearRect(0, 0, c.width, c.height);
+    drawStaticShrimp(ctx2, c.width / 2 + 8, c.height / 2, 1.0, t);
+  }
+  frame(); // call immediately so first frame renders right away
+}
+
+function stopTitleShrimp() {
+  if (titleShrimpAnimId) { cancelAnimationFrame(titleShrimpAnimId); titleShrimpAnimId = null; }
+}
+
+// Also draw on the tutorial step 0 small preview
+function drawTutShrimpPreview() {
+  const c = $('tut-shrimp-preview');
+  if (!c) return;
+  const ctx2 = c.getContext('2d');
+  ctx2.clearRect(0, 0, c.width, c.height);
+  drawStaticShrimp(ctx2, c.width / 2 + 6, c.height / 2, 0.8, performance.now() / 1000);
+}
+
+/* ═══ MINI GAMEPLAY DEMO (Tutorial step 3) ═══ */
+
+let tutDemoAnimId = null;
+
+function startTutDemo() {
+  const c = $('tut-demo-canvas');
+  if (!c) return;
+  const ctx2 = c.getContext('2d');
+  const W = c.width, H = c.height;
+  const wokCx = W / 2, wokCy = H / 2, wokR = 50;
+
+  // Demo state
+  let demoT = 0;
+  const demoShrimp = { x: wokCx - 20, y: wokCy + 10, vy: 0, airborne: false };
+  const demoMsg = { x: wokCx + 15, y: wokCy - 25 };
+  let collected = false;
+  let burstParticles = [];
+  let phase = 0; // 0=slide right, 1=jump, 2=burst, 3=reset
+
+  function frame() {
+    if (tutorialStep !== 3) return;
+    tutDemoAnimId = requestAnimationFrame(frame);
+    demoT += 1 / 60;
+    ctx2.clearRect(0, 0, W, H);
+
+    // Wok background
+    ctx2.fillStyle = '#1a1a24';
+    ctx2.beginPath(); ctx2.arc(wokCx, wokCy, wokR, 0, Math.PI * 2); ctx2.fill();
+    ctx2.strokeStyle = 'rgba(255,255,255,0.1)'; ctx2.lineWidth = 2;
+    ctx2.beginPath(); ctx2.arc(wokCx, wokCy, wokR, 0, Math.PI * 2); ctx2.stroke();
+
+    // Phase logic
+    if (phase === 0) {
+      // Slide toward MSG
+      demoShrimp.x += 0.6;
+      if (demoShrimp.x >= demoMsg.x - 5) { phase = 1; demoShrimp.vy = -4.5; demoShrimp.airborne = true; }
+    } else if (phase === 1) {
+      // Jump arc
+      demoShrimp.vy += 0.25;
+      demoShrimp.y += demoShrimp.vy;
+      if (demoShrimp.airborne && demoShrimp.y <= demoMsg.y + 5 && Math.abs(demoShrimp.x - demoMsg.x) < 15) {
+        collected = true;
+        phase = 2;
+        for (let i = 0; i < 8; i++) {
+          burstParticles.push({
+            x: demoMsg.x, y: demoMsg.y,
+            vx: (Math.random() - 0.5) * 4,
+            vy: (Math.random() - 0.5) * 4,
+            life: 1,
+          });
+        }
+      }
+      if (demoShrimp.y >= wokCy + 10) {
+        demoShrimp.y = wokCy + 10;
+        demoShrimp.vy = 0;
+        demoShrimp.airborne = false;
+        if (!collected) phase = 1; // retry
+      }
+    } else if (phase === 2) {
+      // Burst + land
+      demoShrimp.vy += 0.25;
+      demoShrimp.y += demoShrimp.vy;
+      if (demoShrimp.y >= wokCy + 10) {
+        demoShrimp.y = wokCy + 10;
+        demoShrimp.vy = 0;
+        demoShrimp.airborne = false;
+        phase = 3;
+        demoT = 0;
+      }
+    } else if (phase === 3) {
+      // Wait then reset
+      if (demoT > 1.5) {
+        demoShrimp.x = wokCx - 20;
+        demoShrimp.y = wokCy + 10;
+        collected = false;
+        burstParticles = [];
+        phase = 0;
+        demoT = 0;
+      }
+    }
+
+    // Draw MSG crystal (if not collected)
+    if (!collected) {
+      const bob = Math.sin(demoT * 3.5) * 2;
+      ctx2.save();
+      ctx2.translate(demoMsg.x, demoMsg.y + bob);
+      ctx2.rotate(demoT * 2);
+      ctx2.shadowBlur = 10; ctx2.shadowColor = '#fff';
+      ctx2.fillStyle = '#fff';
+      ctx2.beginPath();
+      ctx2.moveTo(0, -8); ctx2.lineTo(5, 0); ctx2.lineTo(0, 8); ctx2.lineTo(-5, 0);
+      ctx2.closePath(); ctx2.fill();
+      ctx2.shadowBlur = 0;
+      ctx2.restore();
+    }
+
+    // Draw burst particles
+    burstParticles.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.life -= 0.03;
+      if (p.life > 0) {
+        ctx2.globalAlpha = p.life;
+        ctx2.fillStyle = '#ffd700';
+        ctx2.beginPath(); ctx2.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx2.fill();
+        ctx2.globalAlpha = 1;
+      }
+    });
+
+    // Draw shrimp
+    drawStaticShrimp(ctx2, demoShrimp.x, demoShrimp.y, 0.7, demoT);
+
+    // Shadow when airborne
+    if (demoShrimp.airborne) {
+      ctx2.fillStyle = 'rgba(0,0,0,0.2)';
+      ctx2.beginPath();
+      ctx2.ellipse(demoShrimp.x, wokCy + 14, 8, 3, 0, 0, Math.PI * 2);
+      ctx2.fill();
+    }
+  }
+  tutDemoAnimId = requestAnimationFrame(frame);
+}
+
+function stopTutDemo() {
+  if (tutDemoAnimId) { cancelAnimationFrame(tutDemoAnimId); tutDemoAnimId = null; }
+}
+
+/* ═══ ARCADE HIGH SCORE SYSTEM ═══ */
+
+let highScores = [];
+let lastRunTime = 0;
+let lastRunStage = 0;
+let nameEntryMidGame = false;
+
+function loadScores() {
+  try {
+    const stored = localStorage.getItem('sfr_highscores');
+    if (stored) {
+      highScores = JSON.parse(stored);
+    } else {
+      highScores = CFG.DEFAULT_SCORES.map(s => ({ ...s }));
+      saveScoresToStorage();
+    }
+  } catch (e) {
+    highScores = CFG.DEFAULT_SCORES.map(s => ({ ...s }));
+  }
+  sortScores();
+}
+
+function sortScores() {
+  // Sort by time only — fastest 5 MSG wins regardless of stage reached
+  // (stage-first sort buried S1 completers below seeded S2 entries)
+  highScores.sort((a, b) => a.time - b.time);
+}
+
+function saveScoresToStorage() {
+  try { localStorage.setItem('sfr_highscores', JSON.stringify(highScores)); } catch (e) {}
+}
+
+let hasSavedCalibration = false;
+function loadCalibration() {
+  try {
+    const stored = localStorage.getItem('sfr_calibration');
+    if (stored) {
+      const c = JSON.parse(stored);
+      if (c.toss && c.swat) {
+        calibration.tossThreshold = c.toss;
+        calibration.swatThreshold = c.swat;
+        return true;
+      }
+    }
+  } catch (e) {}
+  return false;
+}
+
+function saveScore(name, time, stageNum) {
+  highScores.push({ name: name.toUpperCase().slice(0, 8), time: Math.round(time), stage: stageNum });
+  sortScores();
+  saveScoresToStorage();
+}
+
+function getBestScore() {
+  if (highScores.length === 0) return null;
+  return highScores[0];
+}
+
+function fmtScoreTime(secs) {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return m + ':' + String(s).padStart(2, '0');
+}
+
+function updateHighScorePreview() {
+  const stack = $('title-score-stack');
+  if (!stack) return;
+  const top3 = highScores.slice(0, 3);
+  if (top3.length === 0) { stack.style.display = 'none'; return; }
+  stack.style.display = 'block';
+  const best = top3[0];
+  const rows = top3.map((s, i) =>
+    '<div class="score-row">' +
+    '<span class="score-rank">#' + (i + 1) + '</span>' +
+    '<span class="score-name">' + s.name + '</span>' +
+    '<span class="score-time">' + fmtScoreTime(s.time) + '</span>' +
+    '</div>'
+  ).join('');
+  stack.innerHTML =
+    '<div class="stack-callout">Can you beat <strong>' + best.name + '</strong>?</div>' +
+    '<div class="title-scores-rows">' + rows + '</div>';
+}
+
+function showNameEntry(midGame) {
+  nameEntryMidGame = midGame || false;
+  hideAllScreens();
+  $('name-entry-screen').style.display = 'flex';
+  const stageNum = nameEntryMidGame ? 1 : (stage >= STAGE.S3 ? 3 : stage >= STAGE.S2 ? 2 : 1);
+  lastRunTime = Math.round(gameTime);
+  lastRunStage = stageNum;
+  if (nameEntryMidGame) {
+    $('run-stats').innerHTML = 'Stage 1 complete! Time: <span>' + fmtScoreTime(lastRunTime) + '</span>';
+  } else {
+    $('run-stats').innerHTML = 'Time: <span>' + fmtScoreTime(lastRunTime) + '</span> — Stage <span>' + lastRunStage + '</span>';
+  }
+  const input = $('name-input');
+  input.value = '';
+  setTimeout(() => input.focus(), 100);
+}
+
+function submitScore() {
+  const rawName = $('name-input').value.trim() || 'SHRIMP';
+  const name = rawName.toUpperCase().slice(0, 8);
+  saveScore(name, lastRunTime, lastRunStage);
+  updateHighScorePreview();
+  if (nameEntryMidGame) {
+    nameEntryMidGame = false;
+    _doTransition();
+  } else {
+    const isNewBest = highScores[0].name === name && highScores[0].time === lastRunTime;
+    showScoresScreen(name, isNewBest);
+  }
+}
+
+function showScoresScreen(highlightName, isNewBest) {
+  hideAllScreens();
+  $('scores-screen').style.display = 'flex';
+
+  if (isNewBest) announce('NEW HIGH SCORE!', '', 2500);
+
+  renderScoresArcade(highlightName);
+}
+
+function renderScoresArcade(highlightName) {
+  const wrap = $('scores-arcade');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+
+  highScores.forEach((s, i) => {
+    const isHighlight = highlightName && s.name === highlightName && s.time === lastRunTime;
+    const isDim = i >= 5;
+    const row = document.createElement('div');
+    row.className = 'score-row' + (isDim ? ' dim' : '') + (isHighlight ? ' highlight' : '');
+    row.style.opacity = '0'; // start hidden for stagger animation
+    row.innerHTML =
+      '<span class="score-rank">#' + (i + 1) + '</span>' +
+      '<span class="score-name">' + s.name + '</span>' +
+      '<span class="score-time">' + fmtScoreTime(s.time) + '</span>';
+    wrap.appendChild(row);
+
+    // Stagger reveal
+    const targetOpacity = isDim ? '0.4' : '1';
+    setTimeout(() => {
+      row.style.transition = 'opacity 0.2s ease';
+      row.style.opacity = targetOpacity;
+    }, i * 70 + 50);
+  });
+}
+
+/* ═══ WEBSOCKET RELAY ═══ */
+
+// Auto-detect relay URL from current page origin (for combined serve.js)
+function autoConnectRelay() {
+  let host = $('relay-url').value.trim();
+  if (!host) {
+    // Auto-detect: use the current page's host (works with serve.js + ngrok)
+    host = window.location.host;
+  }
+  connectToRelay(host);
+}
+
+// Generate QR code using qrcodejs (local, no external API)
+function generateQRCode(text, container, size) {
+  container.innerHTML = '';
+  if (typeof QRCode !== 'undefined') {
+    new QRCode(container, {
+      text: text,
+      width: size,
+      height: size,
+      colorDark: '#4cd964',
+      colorLight: '#000000',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+    const child = container.firstChild;
+    if (child) { child.style.display = 'block'; child.style.margin = '0 auto'; child.style.borderRadius = '4px'; }
+  } else {
+    // Fallback: show URL as text
+    const p = document.createElement('p');
+    p.style.cssText = 'color:#4cd964;font-size:10px;word-break:break-all;text-align:center;margin:4px 0;line-height:1.4;';
+    p.textContent = text;
+    container.appendChild(p);
+  }
+}
+
+function connectToRelay(host) {
+  const btn = $('relay-connect-btn');
+  if (btn) { btn.textContent = 'CONNECTING...'; btn.disabled = true; }
+
+  const protocol = host.includes('localhost') ? 'ws' : 'wss';
+  relayWS = new WebSocket(`${protocol}://${host.replace(/^https?:\/\//, '')}`);
+
+  relayWS.onopen = () => {
+    console.log('[Relay] Connected. Requesting room...');
+    relayWS.send(JSON.stringify({ role: 'display' }));
+  };
+
+  relayWS.onerror = () => {
+    if (btn) { btn.textContent = 'GENERATE ROOM CODE'; btn.disabled = false; }
+    const box = $('relay-box');
+    if (box) {
+      box.style.display = 'block';
+      $('relay-code-display').textContent = '----';
+      $('relay-code-display').style.color = '#ff4444';
+      $('relay-code-display').style.textShadow = '0 0 12px rgba(255,68,68,.4)';
+      const urlEl = $('relay-controller-url');
+      if (urlEl) urlEl.textContent = 'Connection failed — is the server running? (node serve.js)';
+    }
+  };
+
+  relayWS.onclose = () => {
+    if (!relayRoom && btn) { btn.textContent = 'GENERATE ROOM CODE'; btn.disabled = false; }
+  };
+
+  relayWS.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+
+    if (msg.type === 'room') {
+      relayRoom = msg.code;
+      if (btn) { btn.textContent = 'ROOM ACTIVE'; }
+      $('relay-code-display').textContent = msg.code;
+      $('relay-code-display').style.color = '#4cd964';
+      $('relay-code-display').style.textShadow = '2px 2px 0 rgba(0,0,0,0.7), 0 0 20px rgba(76,217,100,0.4)';
+      $('relay-box').style.display = 'block';
+
+      // Build controller URL and generate QR code
+      const proto = window.location.protocol;
+      const controllerURL = `${proto}//${host}/controller.html?relay=${encodeURIComponent(host)}&code=${msg.code}`;
+      const urlEl = $('relay-controller-url');
+      if (urlEl) urlEl.textContent = controllerURL;
+      const qrEl = $('relay-qr');
+      if (qrEl) generateQRCode(controllerURL, qrEl, 150);
+    }
+    else if (msg.type === 'controller-connected') {
+      remoteControllerCount = msg.count;
+      updatePhoneStatus('phone');
+      // Show tutorial walkthrough when controller connects from title
+      if (stage === STAGE.TITLE) {
+        startTutorial(false);
+      } else if (stage === STAGE.CALIBRATE) {
+        // Already past tutorial — skip calibration for remote controllers
+        skipCalibration();
+      }
+    }
+    else if (msg.type === 'controller-disconnected') {
+      remoteControllerCount = msg.count;
+      updatePhoneStatus('phone');
+    }
+    // Remote Sensor Data Injection
+    else if (msg.type === 'orientation') {
+      hasDeviceOrientation = true;
+      sensorDebug.hasOrientation = true;
+      sensorDebug.orient = { alpha: msg.alpha || 0, beta: msg.beta || 0, gamma: msg.gamma || 0 };
+      tiltX = Math.max(-1, Math.min(1, (msg.gamma || 0) / 60));
+      tiltY = Math.max(-1, Math.min(1, (msg.beta || 0) / 28)); // more sensitive forward lean
+    }
+    else if (msg.type === 'motion') {
+      processMotion(msg); // Reuses the unified motion parser
+    }
+    else if (msg.type === 'hit') {
+      // Piezo Hit Triggered (Remote Spatula)
+      if (gameRunning) {
+         if (stage === STAGE.S3) {
+            // Zone mapping: 0=Top, 1=Right, 2=Bottom, 3=Left
+            // Map the raw zone hit to a coordinate in world space for attemptS3Swat
+            // Piezo hits bypass threshold checks
+            if (msg.worldX !== undefined) attemptS3Swat(msg.worldX, msg.worldY);
+            else attemptS3Swat();
+         } else if (stage === STAGE.S2) {
+            attemptSwat();
+         } else if (!shrimp.airborne) {
+            tossShrimp();
+         }
+      }
+    }
+  };
+
+  relayWS.onerror = (err) => console.log('[Relay Error]', err);
 }
 
 // Detect device type for debug
@@ -357,14 +1118,14 @@ canvas.addEventListener('touchstart', e => {
   e.preventDefault();
   if (!gameRunning) return;
   if (stage === STAGE.S2 && chef.state === 'holding') { attemptSwat(); return; }
-  if (stage === STAGE.S3) { if (!shrimp.airborne) tossShrimp(); return; }
+  if (stage === STAGE.S3 && s3.hands.length > 0) { attemptS3Swat(); return; }
   if (!shrimp.airborne) tossShrimp();
 }, { passive: false });
 
 window.addEventListener('mousedown', () => {
   if (!gameRunning) return;
   if (stage === STAGE.S2 && chef.state === 'holding') { attemptSwat(); return; }
-  if (stage === STAGE.S3) { if (!shrimp.airborne) tossShrimp(); return; }
+  if (stage === STAGE.S3 && s3.hands.length > 0) { attemptS3Swat(); return; }
   if (!shrimp.airborne) tossShrimp();
 });
 
@@ -416,21 +1177,49 @@ function handleCalibrationFlick(magnitude) {
 }
 
 function updateCalibrationUI() {
+  // Standalone calibration screen dots
   const dots = document.querySelectorAll('#calibration-screen .cal-dot');
   dots.forEach((dot, i) => {
-    if (i < calibration.flicks.length) {
-      dot.classList.add('done');
-      dot.textContent = '✓';
-    } else {
-      dot.classList.remove('done');
-      dot.textContent = (i + 1);
-    }
+    if (i < calibration.flicks.length) dot.classList.add('done');
+    else dot.classList.remove('done');
   });
   const hint = $('cal-hint');
   if (hint) {
     const remaining = CFG.CALIBRATION_FLICKS - calibration.flicks.length;
     hint.textContent = remaining > 0 ? `FLICK UP! (${remaining} left)` : 'CALIBRATING...';
   }
+
+  // Tutorial step-4 embedded calibration dots
+  if (tutorialStep === 4) {
+    const remaining = CFG.CALIBRATION_FLICKS - calibration.flicks.length;
+    for (let i = 0; i < CFG.CALIBRATION_FLICKS; i++) {
+      const dot = $('tut-cal-dot-' + i);
+      if (!dot) continue;
+      if (i < calibration.flicks.length) dot.classList.add('done');
+      else dot.classList.remove('done');
+    }
+    const countEl = $('tut-cal-count');
+    if (countEl) countEl.textContent = remaining > 0 ? `${remaining} left` : 'CALIBRATING...';
+    // Fade arrow out when done
+    const arrowEl = document.querySelector('#tut-cal-hint .flick-arrow-anim');
+    if (arrowEl) arrowEl.style.opacity = remaining > 0 ? '' : '0';
+  }
+}
+
+// Skip embedded tutorial calibration — use defaults and start gameplay
+function skipTutorialCalibration() {
+  calibration.active = false;
+  calibration.tossThreshold = CFG.TOSS_THRESHOLD;
+  calibration.swatThreshold = CFG.SWAT_THRESHOLD;
+  startGameplay();
+}
+
+// Use previously cached calibration (shown on replay when sfr_calibration exists)
+function useSavedCalibration() {
+  calibration.active = false;
+  // thresholds already loaded by loadCalibration() at boot
+  hasSeenTutorial = true;
+  startGameplay();
 }
 
 function finishCalibration() {
@@ -440,6 +1229,15 @@ function finishCalibration() {
   calibration.tossThreshold = avg * 0.6;   // 60% of average = toss
   calibration.swatThreshold = avg * 1.1;   // 110% of average = hard swat
   console.log(`[Calibration] Avg flick: ${avg.toFixed(1)}, Toss: ${calibration.tossThreshold.toFixed(1)}, Swat: ${calibration.swatThreshold.toFixed(1)}`);
+  // Persist calibration so replays don't start from scratch
+  try {
+    localStorage.setItem('sfr_calibration', JSON.stringify({
+      toss: calibration.tossThreshold,
+      swat: calibration.swatThreshold,
+    }));
+    hasSavedCalibration = true;
+  } catch (e) {}
+  hasSeenTutorial = true;
   startGameplay();
 }
 
@@ -450,10 +1248,152 @@ function skipCalibration() {
   startGameplay();
 }
 
+/* ═══ TUTORIAL FLOW (FTUE Walkthrough) ═══ */
+let tutorialStep = 0;
+let isDesktop = false;
+let hasSeenTutorial = false;
+const TUTORIAL_TOTAL_STEPS = 5; // steps 0-4
+let tutStep3Phase = 0;     // sub-phase within step 3: 0=MSG, 1=Oil, 2=Danger
+let tutStep3Timer = null;  // auto-advance timeout
+
+function startTutorial(desktop = false) {
+  isDesktop = desktop;
+  ensureAudio();
+  stopTitleShrimp();
+  showScreen('tutorial-screen');
+
+  if (hasSeenTutorial) {
+    // Replay: skip straight to calibration step
+    tutorialStep = 4;
+    updateTutorialUI();
+    // Show "Use saved" button if we have cached calibration
+    const savedBtn = $('tut-use-saved-btn');
+    if (savedBtn) savedBtn.style.display = hasSavedCalibration ? 'block' : 'none';
+  } else {
+    tutorialStep = 0;
+    updateTutorialUI();
+  }
+}
+
+function nextTutorialStep() {
+  // Stop any active feedback from the current step
+  stopTutTiltFeedback();
+  stopTutItemsFeedback();
+  stopTutDemo();
+  if (tutStep3Timer) { clearTimeout(tutStep3Timer); tutStep3Timer = null; }
+
+  tutorialStep++;
+  if (tutorialStep >= TUTORIAL_TOTAL_STEPS) {
+    // Steps exhausted — desktop mode only reaches here (step 4 shown with NEXT for desktop)
+    setupDesktopFallback();
+  } else {
+    // Request sensors on the transition to step 1 (iOS needs a user gesture)
+    if (tutorialStep === 1 && !sensorsSetup) {
+      requestSensorsEarly();
+    }
+    updateTutorialUI();
+  }
+}
+
+function updateTutorialUI() {
+  for (let i = 0; i < TUTORIAL_TOTAL_STEPS; i++) {
+    const stepEl = $('tut-step-' + i);
+    const dotEl = $('tut-dot-' + i);
+    if (stepEl) stepEl.style.display = (i === tutorialStep) ? 'block' : 'none';
+    if (dotEl) {
+      if (i <= tutorialStep) dotEl.classList.add('done');
+      else dotEl.classList.remove('done');
+    }
+  }
+
+  const btn = $('tut-next-btn');
+
+  // Draw shrimp preview on step 0
+  if (tutorialStep === 0) {
+    drawTutShrimpPreview();
+  }
+
+  if (tutorialStep === 1) {
+    // Live tilt preview with hold→tilt auto-advance
+    if (btn) { btn.style.display = 'block'; btn.innerHTML = 'NEXT'; }
+    startTutTiltFeedback();
+  } else if (tutorialStep === 2) {
+    // Live flick bar — reset state for fresh entry
+    if (btn) { btn.style.display = 'block'; btn.innerHTML = 'NEXT'; }
+    startTutFlickFeedback();
+  } else if (tutorialStep === 3) {
+    // Individual objective cards — auto-advance every 4 seconds
+    if (btn) btn.style.display = 'none'; // no NEXT button during step 3
+    tutStep3Phase = 0;
+    showStep3Phase(0);
+    startTutItemsFeedback();
+    startTutDemo();
+  } else if (tutorialStep === 4) {
+    // Embedded calibration
+    if (isDesktop) {
+      // Desktop: show a NEXT/skip button — clicking goes to setupDesktopFallback
+      if (btn) { btn.style.display = 'block'; btn.innerHTML = 'LET\'S COOK'; }
+    } else {
+      // Phone: hide NEXT, start live calibration
+      if (btn) btn.style.display = 'none';
+      calibration.active = true;
+      calibration.flicks = [];
+      calibration.cooldown = 0;
+      updateCalibrationUI();
+    }
+  } else {
+    if (btn) { btn.style.display = 'block'; btn.innerHTML = 'NEXT'; }
+  }
+}
+
+// Step 3 sub-phase management — one card at a time, auto-advance
+function showStep3Phase(phase) {
+  tutStep3Phase = phase;
+  const cards = document.querySelectorAll('#tut-step-3 .goal-card');
+  cards.forEach((card, i) => {
+    card.style.display = (i === phase) ? 'flex' : 'none';
+    if (i === phase) {
+      card.style.opacity = '0';
+      card.style.transform = 'translateY(12px)';
+      requestAnimationFrame(() => {
+        card.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+        card.style.opacity = '1';
+        card.style.transform = 'translateY(0)';
+      });
+    }
+  });
+
+  // Update the step title per phase
+  const h2 = document.querySelector('#tut-step-3 h2');
+  if (h2) {
+    const titles = ['COLLECT MSG', 'OIL = HEALTH', 'AVOID DANGER'];
+    h2.textContent = titles[phase] || 'THE GOAL';
+  }
+
+  // Auto-advance to next phase or next tutorial step
+  if (tutStep3Timer) clearTimeout(tutStep3Timer);
+  tutStep3Timer = setTimeout(() => {
+    if (tutorialStep !== 3) return; // user already advanced
+    if (phase < 2) {
+      showStep3Phase(phase + 1);
+    } else {
+      // All 3 cards shown, advance to calibration (step 4)
+      nextTutorialStep();
+    }
+  }, 4000);
+}
+
 /* ═══ GAME FLOW ═══ */
 function initGame() {
   ensureAudio();
   stopBgParticles();
+
+  // If sensors were already set up via requestSensorsEarly() in tutorial step 1,
+  // go straight to calibration without re-requesting permission.
+  if (sensorsSetup) {
+    startCalibration();
+    return;
+  }
 
   // iOS 13+ requires explicit permission request from user gesture
   if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -468,6 +1408,7 @@ function initGame() {
       if (orientPerm === 'granted' && motionPerm === 'granted') {
         setupDeviceOrientation();
         setupDeviceMotion();
+        sensorsSetup = true;
         startCalibration();
       } else {
         setupDesktopFallback();
@@ -483,6 +1424,7 @@ function initGame() {
     sensorDebug.permission = 'auto (no API)';
     setupDeviceOrientation();
     setupDeviceMotion();
+    sensorsSetup = true;
     // If sensors fire within 500ms, we'll calibrate; otherwise skip
     setTimeout(() => {
       if (hasDeviceOrientation) { startCalibration(); }
@@ -499,25 +1441,46 @@ function setupDesktopFallback() {
   skipCalibration();
 }
 
+let _wakeLock = null;
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    _wakeLock = await navigator.wakeLock.request('screen');
+    _wakeLock.addEventListener('release', () => { _wakeLock = null; });
+  } catch (e) {}
+}
+function releaseWakeLock() {
+  if (_wakeLock) { _wakeLock.release(); _wakeLock = null; }
+}
+// Re-acquire wake lock when tab becomes visible again
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && gameRunning) requestWakeLock();
+});
+
 function startGameplay() {
   resetAll();
   stage = STAGE.S1;
   gameRunning = true;
   hideAllScreens();
   showHUD();
+  updateDbgVisibility();
+  requestWakeLock();
+  // Lock to portrait so landscape rotation doesn't flip the tilt axes
+  try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('portrait-primary').catch(() => {}); } catch (e) {}
   announce('STAGE 1', 'SURVIVE THE WOK');
   spawnOil();
 }
 
 function restartGame() {
-  // Re-use existing calibration — don't recalibrate
-  resetAll();
-  stage = STAGE.S1;
-  gameRunning = true;
+  stage = STAGE.TITLE;
+  gameRunning = false;
+  stopTitleShrimp(); // cancel any old handle
   hideAllScreens();
-  showHUD();
-  announce('STAGE 1', 'SURVIVE THE WOK');
-  spawnOil();
+  showScreen('title-screen');
+  startTitleShrimp();
+  initBgParticles();
+  updateHighScorePreview();
+  updateDbgVisibility();
 }
 
 function resetAll() {
@@ -542,19 +1505,26 @@ function resetAll() {
   s3 = { wave: 0, hands: [], handsSwatted: 0, handsToSpawn: 0, handSpawnTimer: 0, waveBreakTimer: 0, inBreak: false, ingredients: [] };
   document.body.classList.remove('burn-pulse');
   document.body.classList.remove('stage3-active');
+  // Don't clear phone status if a remote controller is attached
+  if (remoteControllerCount === 0) updatePhoneStatus('none');
 }
 
 function triggerGameOver() {
   gameRunning = false;
+  releaseWakeLock();
   stage = STAGE.GAMEOVER;
   $('go-title').textContent = burnMeter >= CFG.BURN_MAX ? 'BURNT!' : 'GAME OVER';
   $('go-stats').innerHTML = `MSG: <span>${msgCollected}</span> / ${CFG.MSG_TO_WIN}<br>Time: <span>${fmtTime(gameTime)}</span>`;
   $('go-flavor').textContent = burnMeter >= CFG.BURN_MAX ? 'The oil ran dry... crispy shrimp.' : 'The chef got you.';
+  const callout = $('go-beat-callout');
+  if (callout && highScores.length > 0) callout.textContent = `Can you beat ${highScores[0].name}? (${fmtScoreTime(highScores[0].time)})`;
   showScreen('gameover-screen');
+  updateDbgVisibility();
 }
 
 function triggerVictory() {
   gameRunning = false;
+  releaseWakeLock();
   stage = STAGE.VICTORY;
   playSound('victory');
   const swatted = s3.handsSwatted || 0;
@@ -566,34 +1536,72 @@ function triggerS3Victory() {
   triggerVictory();
 }
 
+/* ═══ FINAL MSG DIVE ANIMATION (before S1 → S2 transition) ═══ */
+function triggerFinalMsgDive() {
+  gameRunning = false;
+  obstacles = [];
+  addShake(18);
+  // Burst of particles around the shrimp
+  for (let i = 0; i < 50; i++) spawnParticle(shrimp.x, shrimp.y, '#ffffff', 12, 8);
+  for (let i = 0; i < 30; i++) spawnParticle(shrimp.x, shrimp.y, '#ffd700', 10, 6);
+  spawnPopup(shrimp.x, shrimp.y - 20, 'MSG POWER!', '#ffd700');
+  playSound('collect');
+  // Animate shrimp: scale bounce + spin over 1.3s, then transition
+  const startTime = performance.now();
+  function animDive() {
+    const elapsed = (performance.now() - startTime) / 1000;
+    if (elapsed < 1.3) {
+      shrimp.scale = 1 + Math.sin(elapsed / 1.3 * Math.PI) * 2.2;
+      shrimp.angle += 0.13;
+      requestAnimationFrame(animDive);
+    } else {
+      shrimp.scale = 1;
+      shrimp.angle = 0;
+      startTransition();
+    }
+  }
+  requestAnimationFrame(animDive);
+}
+
+/* ═══ TRANSITION 1: S1 → S2 ═══ */
 function startTransition() {
   stage = STAGE.TRANSITION;
   gameRunning = false;
   obstacles = [];
+  // Show name entry for Stage 1 score before transition cutscene
+  showNameEntry(true);
+}
+
+function _doTransition() {
   const el = $('transition-text');
   showScreen('transition-screen');
 
-  el.innerHTML = '<span style="color:#f7c948;font-size:32px">✨</span><br>The MSG... it\'s changing you...';
+  el.innerHTML = '<span style="color:#f7c948;font-size:24px;font-weight:800;letter-spacing:4px">* * *</span><br>The MSG... it\'s changing you...';
   setTimeout(() => {
-    el.innerHTML = '<span style="font-size:40px">🍤💪</span><br><span style="color:#f7c948;font-weight:800">Wait—the chef noticed you.<br>He reaches into the wok...</span><br><span style="font-size:18px;color:#ff6b35;margin-top:8px;display:inline-block;font-weight:700">FIGHT BACK!</span><br><span style="font-size:14px;opacity:.6;margin-top:8px;display:inline-block">Swat his hand away! Shake hard or tap!</span>';
+    el.innerHTML = '<span style="font-size:32px;font-weight:800;color:#f7c948;letter-spacing:3px">BOSS FIGHT</span><br><span style="color:#f7c948;font-weight:800;margin-top:12px;display:inline-block">The chef noticed you.<br>He reaches into the wok...</span><br><span style="font-size:18px;color:#ff6b35;margin-top:8px;display:inline-block;font-weight:700">FIGHT BACK!</span><br><span style="font-size:14px;opacity:.8;margin-top:8px;display:inline-block;color:#fff">Swat his hand away!<br>Shake your phone hard or tap the screen!</span>';
   }, 2500);
   setTimeout(() => {
-    hideAllScreens();
-    showHUD();
-    showChefBar();
-    gameRunning = true;
-    stage = STAGE.S2;
-    chef.active = true;
-    chef.state = 'idle';
-    chef.stateTimer = 2;
-    oilLevel = CFG.OIL_MAX; // Refill for Stage 2
-    burnMeter = 0;
-    spatulaTimer = CFG.S2_SPATULA_MIN;
-    pepperTimer = CFG.S2_PEPPER_MIN;
-    oilpopTimer = CFG.S2_OILPOP_MIN;
-    announce('STAGE 2', 'SWAT THE CHEF');
-    $('hud-left-label').textContent = 'CHEF HP';
-  }, 5000);
+    startS2();
+  }, 7500);
+}
+
+function startS2() {
+  hideAllScreens();
+  showHUD();
+  showChefBar();
+  gameRunning = true;
+  stage = STAGE.S2;
+  updateDbgVisibility();
+  chef.active = true;
+  chef.state = 'idle';
+  chef.stateTimer = 2;
+  oilLevel = CFG.OIL_MAX; // Refill for Stage 2
+  burnMeter = 0;
+  spatulaTimer = CFG.S2_SPATULA_MIN;
+  pepperTimer = CFG.S2_PEPPER_MIN;
+  oilpopTimer = CFG.S2_OILPOP_MIN;
+  announce('STAGE 2', 'SWAT THE CHEF');
+  $('hud-left-label').textContent = 'CHEF HP';
 }
 
 /* ═══ TRANSITION 2: S2 → UPGRADE SHOP → S3 ═══ */
@@ -604,13 +1612,14 @@ function startTransition2() {
   const el = $('transition2-text');
   showScreen('transition2-screen');
 
-  el.innerHTML = '<span style="font-size:48px">🍤⚡👨‍🍳</span><br><span style="color:#f7c948;font-weight:800;font-size:28px">ROLE REVERSAL</span><br><span style="color:#ddd;margin-top:12px;display:inline-block">The MSG courses through you...<br>You\'re not the ingredient anymore.</span>';
+  el.innerHTML = '<span style="color:#f7c948;font-weight:800;font-size:28px;letter-spacing:3px">ROLE REVERSAL</span><br><span style="color:#ddd;margin-top:12px;display:inline-block">The MSG courses through you...<br>You\'re not the ingredient anymore.</span>';
   setTimeout(() => {
-    el.innerHTML = '<span style="font-size:56px">🍤🍳</span><br><span style="color:#ff6b35;font-weight:800;font-size:24px">THE SHRIMP FRIED THE RICE</span><br><span style="color:#ddd;margin-top:8px;display:inline-block;font-size:16px">Now YOU hold the wok.<br>Defend your kitchen from greedy hands!</span>';
-  }, 3000);
+    el.innerHTML = '<span style="color:#ff6b35;font-weight:800;font-size:24px;letter-spacing:2px">THE SHRIMP FRIED THE RICE</span><br><span style="color:#ddd;margin-top:8px;display:inline-block;font-size:16px">Now YOU hold the wok.<br>Defend your kitchen from greedy hands!<br><span style="font-size:13px;opacity:.8;margin-top:6px;display:inline-block;color:#f7c948">NEW MECHANIC:<br>Shake hard or tap to swat hands away!</span></span>';
+  }, 3500);
   setTimeout(() => {
-    showUpgradeShop();
-  }, 6000);
+    // Skip upgrade shop — go directly to S3
+    startS3();
+  }, 8000);
 }
 
 /* ═══ UPGRADE SHOP ═══ */
@@ -698,7 +1707,7 @@ function initS3() {
     s3.ingredients.push({
       x: WOK.cx() + Math.cos(a) * d,
       y: WOK.cy() + Math.sin(a) * d,
-      type: Math.random() > 0.6 ? '🍚' : Math.random() > 0.5 ? '🥕' : '🧅',
+      type: Math.random() > 0.6 ? 'R' : Math.random() > 0.5 ? 'C' : 'O',
       stolen: false,
     });
   }
@@ -725,6 +1734,7 @@ function startS3() {
   hideAllScreens();
   stage = STAGE.S3;
   gameRunning = true;
+  updateDbgVisibility();
 
   // Restore circular canvas (same as S1/S2)
   resize();
@@ -786,7 +1796,10 @@ function tossShrimp() {
   if (shrimp.airborne) return;
   shrimp.airborne = true;
   shrimp.airTime = CFG.AIR_DURATION + getUpgradeBonus('jumpHeight');
+  shrimp.vx = 0; // lock in place — kill drift at jump start
+  shrimp.vy = 0;
   shrimp.scale = 1.6;
+  oilLevel = Math.max(0, oilLevel - CFG.OIL_MAX * 0.05); // Classmate: Jump costs oil (reduced to 5%)
   playSound('whoosh');
   for (let i = 0; i < 10; i++) spawnParticle(shrimp.x, shrimp.y, '#fff', 3, 5);
 }
@@ -820,7 +1833,7 @@ function attemptSwat() {
   timeScale = CFG.SLOWMO_SCALE;
   setTimeout(() => { timeScale = 1; }, CFG.SLOWMO_DURATION_MS);
 
-  spawnPopup(chef.handX, chef.handY, '💥 SWAT!', '#ff4444');
+  spawnPopup(chef.handX, chef.handY, 'SWAT!', '#ff4444');
   for (let i = 0; i < 25; i++) spawnParticle(chef.handX, chef.handY, '#ff6666', 12, 5);
 
   if (chef.hp <= 0) { chef.active = false; setTimeout(startTransition2, 600); }
@@ -938,7 +1951,7 @@ function updateChef(dt) {
         if (dist(shrimp.x, shrimp.y, chef.handX, chef.handY) < shrimp.radius * shrimp.scale + 18) {
           chef.hp -= CFG.RAM_DAMAGE; chef.invuln = 0.5;
           addShake(12); playSound('hit');
-          spawnPopup(chef.handX, chef.handY, '💢 RAM!', '#ffaa33');
+          spawnPopup(chef.handX, chef.handY, 'RAM!', '#ffaa33');
           for (let i = 0; i < 12; i++) spawnParticle(chef.handX, chef.handY, '#ffaa33', 8, 4);
           if (chef.hp <= 0) { chef.active = false; setTimeout(startTransition2, 600); }
         }
@@ -992,6 +2005,18 @@ function update() {
     if (keys['ArrowDown'] || keys['KeyS']) tiltY = 0.8;
   }
 
+  // ─── Sizzle Audio Logic (Classmate feature) ───
+  if (sizzleGain) {
+    if (stage === STAGE.S1 || stage === STAGE.S2) {
+      const speed = Math.sqrt(shrimp.vx ** 2 + shrimp.vy ** 2);
+      // Volume increases as speed nears 0, representing resting on the hot wok
+      const targetGain = Math.max(0, 0.12 - speed * 0.018);
+      sizzleGain.gain.setTargetAtTime(shrimp.airborne ? 0 : targetGain, audioCtx.currentTime, 0.1);
+    } else {
+      sizzleGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+    }
+  }
+
   // ─── Shrimp physics (S1/S2 only — S3 handles its own) ───
   if (stage !== STAGE.S3) {
   const speedMul = 1 + getUpgradeBonus('speedBoost');
@@ -1029,8 +2054,8 @@ function update() {
     shrimp.airTime -= dt;
     const prog = 1 - (shrimp.airTime / CFG.AIR_DURATION);
     shrimp.scale = 1 + Math.sin(prog * Math.PI) * 1.5;
-    shrimp.vx += tiltX * CFG.GRAVITY * 0.1;
-    shrimp.vy += tiltY * CFG.GRAVITY * 0.1;
+    shrimp.vx *= 0.85; // friction-only during jump — no tilt drift
+    shrimp.vy *= 0.85;
     shrimp.x += shrimp.vx; shrimp.y += shrimp.vy;
     const dx = shrimp.x - WOK.cx(), dy = shrimp.y - WOK.cy(), d = Math.sqrt(dx * dx + dy * dy);
     if (d > WOK.radius() - shrimp.radius) {
@@ -1054,6 +2079,14 @@ function update() {
     for (let i = oilItems.length - 1; i >= 0; i--) {
       const m = oilItems[i];
       if (m.collected) continue;
+
+      m.age = (m.age || 0) + dt;
+      if (m.age > 5.0) {
+        for (let j = 0; j < 3; j++) spawnParticle(m.x, m.y, '#ffaa00', 2, 2);
+        oilItems.splice(i, 1);
+        continue;
+      }
+
       const hitR = (shrimp.radius * shrimp.scale) + m.radius;
       if (shrimp.airborne && dist(shrimp.x, shrimp.y, m.x, m.y) < hitR) {
         m.collected = true;
@@ -1079,7 +2112,8 @@ function update() {
           spawnPopup(m.x, m.y, `MSG ${msgCollected}/${CFG.MSG_TO_WIN}`, '#ffffff');
           for (let j = 0; j < 15; j++) spawnParticle(m.x, m.y, '#ffffff', 8, 5);
           msgItems.splice(i, 1);
-          if (msgCollected >= CFG.MSG_TO_WIN) { startTransition(); return; }
+          if (msgCollected >= CFG.MSG_TO_WIN) { triggerFinalMsgDive(); return; }
+          if (msgCollected === CFG.MSG_TO_WIN - 1) { announce('ONE MORE!', 'One MSG to transform!'); }
         }
       }
     }
@@ -1134,6 +2168,9 @@ function update() {
   } else {
     draw();
   }
+
+  // Tilt feedback overlay (bottom-left)
+  drawMiniCtrl();
 }
 
 /* ═══ HUD ═══ */
@@ -1168,6 +2205,48 @@ function updateHUD() {
 }
 
 /* ═══ RENDERING ═══ */
+/* ═══ MINI CONTROLLER — tilt feedback (bottom-left) ═══ */
+function drawMiniCtrl() {
+  const mc = $('mini-ctrl-canvas');
+  if (!mc || mc.style.display === 'none') return;
+  const mctx = mc.getContext('2d');
+  const w = mc.width, h = mc.height;
+  const cx = w / 2, cy = h / 2, r = w / 2 - 4;
+
+  mctx.clearRect(0, 0, w, h);
+
+  // Wok outline
+  mctx.beginPath();
+  mctx.arc(cx, cy, r, 0, Math.PI * 2);
+  mctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  mctx.lineWidth = 1.5;
+  mctx.stroke();
+
+  // Crosshair
+  mctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  mctx.lineWidth = 0.5;
+  mctx.beginPath(); mctx.moveTo(cx - r, cy); mctx.lineTo(cx + r, cy); mctx.stroke();
+  mctx.beginPath(); mctx.moveTo(cx, cy - r); mctx.lineTo(cx, cy + r); mctx.stroke();
+
+  // Tilt dot — normalize tiltX/tiltY to the circle radius
+  // tiltX/tiltY are roughly -1 to 1 based on calibration, clamp to circle
+  const maxTilt = 0.8; // how far tilt can go before hitting edge
+  const dotX = cx + Math.max(-1, Math.min(1, tiltX / maxTilt)) * r * 0.85;
+  const dotY = cy + Math.max(-1, Math.min(1, tiltY / maxTilt)) * r * 0.85;
+
+  // Glow
+  mctx.beginPath();
+  mctx.arc(dotX, dotY, 6, 0, Math.PI * 2);
+  mctx.fillStyle = 'rgba(247,201,72,0.25)';
+  mctx.fill();
+
+  // Dot
+  mctx.beginPath();
+  mctx.arc(dotX, dotY, 3, 0, Math.PI * 2);
+  mctx.fillStyle = '#f7c948';
+  mctx.fill();
+}
+
 function draw() {
   const cx = WOK.cx(), cy = WOK.cy(), r = WOK.radius();
   ctx.fillStyle = '#0a0a10';
@@ -1216,8 +2295,22 @@ function draw() {
   for (const m of msgItems) {
     if (m.collected) continue;
     const bob = Math.sin(gameTime * 3.5 + m.bob) * 3;
+    // Proximity glow: pulse when shrimp is close but not yet airborne (near-miss feel)
+    const mDist = dist(shrimp.x, shrimp.y, m.x, m.y);
+    const proximityRange = m.radius * 5;
+    if (mDist < proximityRange && !shrimp.airborne) {
+      const proximity = 1 - mDist / proximityRange;
+      const glowPulse = 0.5 + 0.5 * Math.sin(gameTime * 12);
+      ctx.save();
+      ctx.globalAlpha = proximity * glowPulse * 0.5;
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(m.x, m.y + bob, m.radius * 2.2, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
     ctx.save(); ctx.translate(m.x, m.y + bob); ctx.rotate(gameTime * 2 + m.bob);
-    ctx.shadowBlur = 20; ctx.shadowColor = '#ffffff';
+    const shadowSize = (mDist < proximityRange && !shrimp.airborne) ? 30 : 20;
+    ctx.shadowBlur = shadowSize; ctx.shadowColor = '#ffffff';
     ctx.fillStyle = '#fff';
     ctx.beginPath(); ctx.moveTo(0, -m.radius); ctx.lineTo(m.radius * 0.6, 0); ctx.lineTo(0, m.radius); ctx.lineTo(-m.radius * 0.6, 0); ctx.closePath(); ctx.fill();
     ctx.fillStyle = 'rgba(200,220,255,0.6)';
@@ -1391,6 +2484,19 @@ function drawShrimp() {
   const bb = isS2 ? 80 : Math.max(50, 100 * (1 - burnTint));
   const bodyColor = `rgb(${rr},${gg},${bb})`;
 
+  // Overhead stamina/oil bar (Classmate suggestion)
+  if (stage === STAGE.S1 || stage === STAGE.S2) {
+    ctx.save();
+    ctx.translate(0, -shrimp.radius * 2.5); // Position above the shrimp
+    const barW = 28, barH = 4;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(-barW/2 - 1, -barH/2 - 1, barW + 2, barH + 2);
+    const fillRat = oilLevel / (CFG.OIL_MAX + getUpgradeBonus('oilCapacity'));
+    ctx.fillStyle = fillRat > 0.6 ? '#44ff44' : fillRat > 0.25 ? '#ffd700' : '#ff4444';
+    ctx.fillRect(-barW/2, -barH/2, barW * Math.min(1, Math.max(0, fillRat)), barH);
+    ctx.restore();
+  }
+
   // Body segments
   for (let i = 0; i < 5; i++) {
     const offset = Math.sin(gameTime * 20 + i) * (shrimp.airborne ? 2 : shrimp.wobble * 10);
@@ -1446,10 +2552,10 @@ function attemptS3Swat() {
         // Reward: recover some oil per swat (keeps economy survivable)
         const oilReward = 8;
         oilLevel = Math.min(CFG.OIL_MAX + getUpgradeBonus('oilCapacity'), oilLevel + oilReward);
-        spawnPopup(h.handX, h.handY, '💥 SWAT! +' + oilReward + '🫧', '#ff4444');
+        spawnPopup(h.handX, h.handY, 'SWAT! +' + oilReward + ' OIL', '#ff4444');
         for (let j = 0; j < 15; j++) spawnParticle(h.handX, h.handY, '#ff6666', 10, 4);
       } else {
-        spawnPopup(h.handX, h.handY, '✋ HIT!', '#ffaa44');
+        spawnPopup(h.handX, h.handY, 'HIT!', '#ffaa44');
         for (let j = 0; j < 8; j++) spawnParticle(h.handX, h.handY, '#ffaa44', 6, 3);
       }
       hit = true;
@@ -1492,8 +2598,8 @@ function updateS3(dt) {
     shrimp.airTime -= dt;
     const prog = 1 - (shrimp.airTime / CFG.AIR_DURATION);
     shrimp.scale = 1 + Math.sin(prog * Math.PI) * 1.5;
-    shrimp.vx += tiltX * CFG.GRAVITY * 0.1;
-    shrimp.vy += tiltY * CFG.GRAVITY * 0.1;
+    shrimp.vx *= 0.85; // friction-only during jump — no tilt drift
+    shrimp.vy *= 0.85;
     shrimp.x += shrimp.vx; shrimp.y += shrimp.vy;
     const dx = shrimp.x - WOK.cx(), dy = shrimp.y - WOK.cy(), d = Math.sqrt(dx * dx + dy * dy);
     if (d > WOK.radius() - shrimp.radius) {
@@ -1509,9 +2615,9 @@ function updateS3(dt) {
           h.invuln = 0.4;
           if (h.hp <= 0) {
             h.state = 'swatted'; h.stateTimer = 0.3; s3.handsSwatted++;
-            spawnPopup(h.handX, h.handY, '💥 RAM!', '#ffd700');
+            spawnPopup(h.handX, h.handY, 'RAM!', '#ffd700');
           } else {
-            spawnPopup(h.handX, h.handY, '✋', '#ffaa44');
+            spawnPopup(h.handX, h.handY, 'HIT', '#ffaa44');
           }
           for (let j = 0; j < 10; j++) spawnParticle(h.handX, h.handY, '#ffd700', 8, 4);
           addShake(8); playSound('hit');
@@ -1687,7 +2793,7 @@ function drawS3() {
 
   // Wave counter on canvas
   ctx.fillStyle = '#f7c948'; ctx.font = 'bold 15px Outfit'; ctx.textAlign = 'center';
-  ctx.fillText(`🍤 Wave ${s3.wave} / ${CFG.S3_WAVES}`, cx, cy - r + 22);
+  ctx.fillText(`Wave ${s3.wave} / ${CFG.S3_WAVES}`, cx, cy - r + 22);
 
   const active = s3.hands.filter(h => h.state !== 'swatted' && h.state !== 'retreating').length;
   const remaining = active + s3.handsToSpawn;
@@ -1863,7 +2969,7 @@ function initBgParticles() {
       vy: -Math.random() * 0.8 - 0.2,
       size: Math.random() * 3 + 1,
       alpha: Math.random() * 0.4 + 0.1,
-      emoji: ['✨','🔥','🍤','💫','🫧'][Math.floor(Math.random() * 5)],
+      emoji: ['·','·','•','•','·'][Math.floor(Math.random() * 5)],
     });
   }
   animateBg();
@@ -1893,6 +2999,12 @@ function stopBgParticles() {
 
 // Start particles on load (title screen only)
 initBgParticles();
+
+// Start title shrimp animation + load high scores + restore calibration
+startTitleShrimp();
+loadScores();
+hasSavedCalibration = loadCalibration();
+updateHighScorePreview();
 
 /* ═══ START ═══ */
 requestAnimationFrame(update);

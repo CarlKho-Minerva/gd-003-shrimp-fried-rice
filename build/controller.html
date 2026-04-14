@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Shrimp Fried Rice — Controller</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    background: #0a0810; color: #fff; text-align: center;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100dvh; padding: 24px 20px;
+    touch-action: none; -webkit-user-select: none; user-select: none;
+  }
+
+  /* ── Setup panel (before connect) ── */
+  #setup-panel { width: 100%; max-width: 300px; }
+  #setup-panel h1 { font-size: 22px; color: #f7c948; margin-bottom: 4px; letter-spacing: 2px; }
+  #setup-panel p { color: #555; font-size: 12px; margin-bottom: 28px; }
+  label { display: block; text-align: left; margin-bottom: 6px; font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+  input {
+    width: 100%; padding: 12px; font-size: 22px; text-align: center;
+    background: rgba(255,255,255,.06); border: 2px solid rgba(255,255,255,.15); color: #fff;
+    border-radius: 8px; margin-bottom: 18px; letter-spacing: 6px;
+    text-transform: uppercase;
+  }
+  input:focus { outline: none; border-color: #f7c948; }
+  #ws-url { font-size: 14px; letter-spacing: 1px; padding: 10px; }
+  button {
+    width: 100%; padding: 14px; font-size: 16px; font-weight: 700;
+    background: linear-gradient(180deg, #f7c948 0%, #e0a020 100%);
+    color: #1a0800; border: 3px solid #1a0800; border-radius: 6px;
+    cursor: pointer; box-shadow: 0 5px 0 #7a4800;
+    text-transform: uppercase; letter-spacing: 2px;
+  }
+  button:active { transform: translateY(4px); box-shadow: 0 1px 0 #7a4800; }
+  button:disabled { background: #333; color: #666; border-color: #444; box-shadow: 0 4px 0 #222; cursor: not-allowed; }
+
+  #status { margin-top: 16px; font-size: 13px; color: #666; letter-spacing: 1px; }
+  .status-connected { color: #4cd964 !important; }
+  .status-error { color: #ff3b30 !important; }
+
+  /* ── Live play panel (after connect) ── */
+  #play-panel { display: none; flex-direction: column; align-items: center; width: 100%; }
+
+  #conn-badge {
+    font-size: 12px; color: #4cd964; letter-spacing: 2px;
+    text-transform: uppercase; margin-bottom: 20px;
+    padding: 6px 16px; border: 1px solid rgba(76,217,100,.3);
+    border-radius: 20px; background: rgba(76,217,100,.08);
+  }
+
+  /* Tilt preview canvas — the wok */
+  #tilt-canvas {
+    border-radius: 50%;
+    display: block;
+    box-shadow: 0 0 0 4px rgba(255,255,255,.06), 0 12px 40px rgba(0,0,0,.6);
+  }
+
+  #tilt-hint {
+    margin-top: 16px; font-size: 12px; color: #444;
+    letter-spacing: 1px; text-transform: uppercase;
+  }
+  #flick-indicator {
+    margin-top: 20px; font-size: 13px; color: rgba(255,255,255,.25);
+    letter-spacing: 1px; transition: color 0.2s, transform 0.1s;
+  }
+  #flick-indicator.fired { color: #f7c948; transform: scale(1.15); }
+</style>
+</head>
+<body>
+
+<!-- ── SETUP PANEL ── -->
+<div id="setup-panel">
+  <h1>🍤 WOK</h1>
+  <p>Enter the 4-digit room code from the game screen</p>
+
+  <div id="ws-url-container" style="margin-bottom:16px">
+    <label>Relay server (auto-detected)</label>
+    <input type="text" id="ws-url" value="" placeholder="e.g. abcd.ngrok.app" />
+  </div>
+
+  <label>Room Code</label>
+  <input type="text" id="code" maxlength="4" placeholder="1234" autocomplete="off" inputmode="numeric" />
+  <button id="connect-btn">CONNECT</button>
+  <div id="status">Enter the code shown on the game screen</div>
+</div>
+
+<!-- ── PLAY PANEL (shown after connect) ── -->
+<div id="play-panel">
+  <div id="conn-badge">● CONNECTED</div>
+  <canvas id="tilt-canvas" width="220" height="220"></canvas>
+  <div id="tilt-hint">Tilt to move · Flick up to jump</div>
+  <div id="flick-indicator">↑ FLICK</div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  let ws = null;
+  let isConnected = false;
+  let sensorsActive = false;
+  let tiltX = 0, tiltY = 0; // -1..1
+
+  /* ── Wake Lock — keep screen on ── */
+  let _wakeLock = null;
+  async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    try {
+      _wakeLock = await navigator.wakeLock.request('screen');
+      _wakeLock.addEventListener('release', () => { _wakeLock = null; });
+    } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && isConnected) requestWakeLock();
+  });
+
+  /* ── URL param auto-fill & auto-connect ── */
+  const urlParams = new URLSearchParams(window.location.search);
+  const paramRelay = urlParams.get('relay');
+  const paramCode  = urlParams.get('code');
+  if (paramRelay) {
+    $('ws-url').value = paramRelay;
+  } else {
+    // Try cached relay from last session, then fall back to current host
+    const cachedRelay = (() => { try { return localStorage.getItem('sfr_relay'); } catch(e) { return null; } })();
+    $('ws-url').value = cachedRelay || window.location.host;
+  }
+  if (paramCode) $('code').value = paramCode;
+  if (paramRelay && paramCode) setTimeout(() => $('connect-btn').click(), 500);
+
+  /* ── Connect button ── */
+  $('connect-btn').addEventListener('click', async () => {
+    const code = $('code').value.trim();
+    const host = $('ws-url').value.trim() || window.location.host;
+    if (code.length < 4 || !host) return;
+
+    // iOS 13+ sensor permission
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      try {
+        const op = await DeviceOrientationEvent.requestPermission();
+        const mp = typeof DeviceMotionEvent.requestPermission === 'function' ? await DeviceMotionEvent.requestPermission() : 'granted';
+        if (op !== 'granted' || mp !== 'granted') {
+          setStatus('Sensor permission denied', 'error'); return;
+        }
+      } catch (err) { setStatus('Permission error: ' + err.message, 'error'); return; }
+    }
+    connectWS(host, code);
+  });
+
+  function setStatus(msg, type) {
+    const el = $('status');
+    el.textContent = msg;
+    el.className = type === 'ok' ? 'status-connected' : type === 'error' ? 'status-error' : '';
+  }
+
+  function connectWS(host, code) {
+    if (ws) ws.close();
+    // Cache relay URL so next visit doesn't need re-typing
+    try { localStorage.setItem('sfr_relay', host); } catch (e) {}
+    const protocol = host.startsWith('localhost') || host.startsWith('127.') ? 'ws' : 'wss';
+    ws = new WebSocket(`${protocol}://${host.replace(/^https?:\/\//, '')}`);
+    setStatus('Connecting…');
+    $('connect-btn').disabled = true;
+
+    ws.onopen = () => ws.send(JSON.stringify({ role: 'controller', code }));
+    ws.onmessage = e => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'joined') {
+        isConnected = true;
+        $('setup-panel').style.display = 'none';
+        $('play-panel').style.display = 'flex';
+        requestWakeLock();
+        // Lock portrait so landscape doesn't flip the tilt axes
+        try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('portrait-primary').catch(() => {}); } catch (e) {}
+        startSensors();
+        startTiltCanvas();
+      } else if (msg.type === 'error') {
+        setStatus('❌ ' + msg.message, 'error');
+        $('connect-btn').disabled = false;
+        ws.close();
+      } else if (msg.type === 'display-disconnected') {
+        setStatus('Game screen disconnected — reconnecting…');
+      }
+    };
+    ws.onerror = () => { setStatus('Connection error', 'error'); $('connect-btn').disabled = false; };
+    ws.onclose = () => {
+      if (isConnected) {
+        isConnected = false;
+        $('setup-panel').style.display = 'block';
+        $('play-panel').style.display = 'none';
+        stopSensors();
+        $('connect-btn').disabled = false;
+        setStatus('Disconnected — enter code to reconnect');
+      }
+    };
+  }
+
+  /* ── Sensors ── */
+  function startSensors() {
+    if (sensorsActive) return;
+    sensorsActive = true;
+    window.addEventListener('deviceorientation', handleOrientation);
+    window.addEventListener('devicemotion', handleMotion);
+  }
+  function stopSensors() {
+    sensorsActive = false;
+    window.removeEventListener('deviceorientation', handleOrientation);
+    window.removeEventListener('devicemotion', handleMotion);
+  }
+
+  function handleOrientation(e) {
+    if (!isConnected || ws.readyState !== WebSocket.OPEN) return;
+    if (e.gamma === null || e.beta === null) return;
+    tiltX = Math.max(-1, Math.min(1, (e.gamma || 0) / 60));
+    tiltY = Math.max(-1, Math.min(1, (e.beta  || 0) / 28)); // was 45 — more sensitive forward lean
+    ws.send(JSON.stringify({ type: 'orientation', alpha: e.alpha || 0, beta: e.beta || 0, gamma: e.gamma || 0 }));
+  }
+
+  let lastMotionTime = 0;
+  let flickCooldown = 0;
+  function handleMotion(e) {
+    if (!isConnected || ws.readyState !== WebSocket.OPEN) return;
+    const a = e.accelerationIncludingGravity;
+    if (!a) return;
+    const now = Date.now();
+    if (now - lastMotionTime < 20) return;
+    lastMotionTime = now;
+    ws.send(JSON.stringify({ type: 'motion', x: a.x || 0, y: a.y || 0, z: a.z || 0 }));
+
+    // Flash the flick indicator when a big motion fires
+    const mag = Math.sqrt((a.x||0)**2 + (a.y||0)**2 + (a.z||0)**2);
+    if (mag > 18 && now - flickCooldown > 400) {
+      flickCooldown = now;
+      const el = $('flick-indicator');
+      el.classList.add('fired');
+      setTimeout(() => el.classList.remove('fired'), 300);
+    }
+  }
+
+  /* ── Tilt canvas — live shrimp indicator ── */
+  function startTiltCanvas() {
+    const canvas = $('tilt-canvas');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const cx = W / 2, cy = H / 2, wokR = W / 2 - 8;
+
+    function frame() {
+      if (!isConnected) return;
+      requestAnimationFrame(frame);
+      ctx.clearRect(0, 0, W, H);
+
+      // Wok circle
+      ctx.fillStyle = '#1a1424';
+      ctx.beginPath(); ctx.arc(cx, cy, wokR, 0, Math.PI * 2); ctx.fill();
+
+      // Grid lines
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(cx - wokR, cy); ctx.lineTo(cx + wokR, cy); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx, cy - wokR); ctx.lineTo(cx, cy + wokR); ctx.stroke();
+
+      // Wok border
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(cx, cy, wokR, 0, Math.PI * 2); ctx.stroke();
+
+      // Shrimp dot position from tilt
+      const dotX = cx + tiltX * wokR * 0.72;
+      const dotY = cy + tiltY * wokR * 0.72;
+
+      // Glow
+      ctx.fillStyle = 'rgba(255,107,53,0.15)';
+      ctx.beginPath(); ctx.arc(dotX, dotY, 22, 0, Math.PI * 2); ctx.fill();
+
+      // Draw mini shrimp (5 body segments)
+      const t = performance.now() / 1000;
+      const bodyColor = 'rgb(255,140,80)';
+      ctx.save();
+      ctx.translate(dotX, dotY);
+      for (let i = 0; i < 5; i++) {
+        const bob = Math.sin(t * 3 + i) * 1.2;
+        const r = 10 * (1 - i * 0.14);
+        ctx.fillStyle = bodyColor;
+        ctx.beginPath(); ctx.arc(-i * 4, bob, r, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1.5; ctx.stroke();
+      }
+      // Eyes
+      ctx.fillStyle = '#111';
+      ctx.beginPath(); ctx.arc(3, -3, 2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(3, 3, 2, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(3.8, -3.8, 0.8, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(3.8, 2.2, 0.8, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+
+      // Sizzle ring when near edge (heat warning)
+      const distFromCenter = Math.sqrt(tiltX * tiltX + tiltY * tiltY);
+      if (distFromCenter > 0.7) {
+        const pulse = 0.4 + 0.4 * Math.sin(t * 8);
+        ctx.strokeStyle = `rgba(255,60,60,${pulse})`;
+        ctx.lineWidth = 3;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath(); ctx.arc(cx, cy, wokR - 4, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+</script>
+</body>
+</html>

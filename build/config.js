@@ -64,7 +64,7 @@ const CFG = {
   S2_OILPOP_MAX: 5.5,
 
   // ─── Calibration ───
-  CALIBRATION_FLICKS: 3,   // Number of flicks to average during calibration
+  CALIBRATION_FLICKS: 5,   // Number of flicks to average during calibration
   CALIBRATION_COOLDOWN: 0.5, // Seconds between valid calibration flicks
   CALIBRATION_MIN_ACCEL: 8,  // Minimum accel to register as a calibration flick
 
@@ -87,10 +87,10 @@ const CFG = {
 
   // ─── Upgrade Shop (Watson: "every subsystem has to be fun") ───
   UPGRADES: {
-    jumpHeight:  { label: '🦐 Jump Height',  baseCost: 2, costMult: 1.5, maxLevel: 3, effect: 0.3 },
-    tempResist:  { label: '🔥 Temp Resist',  baseCost: 2, costMult: 1.5, maxLevel: 3, effect: 15 },
-    oilCapacity: { label: '🫧 Oil Capacity', baseCost: 3, costMult: 2.0, maxLevel: 2, effect: 25 },
-    speedBoost:  { label: '⚡ Speed Boost',   baseCost: 3, costMult: 2.0, maxLevel: 2, effect: 0.15 },
+    jumpHeight:  { label: 'Jump Height',  baseCost: 2, costMult: 1.5, maxLevel: 3, effect: 0.3 },
+    tempResist:  { label: 'Temp Resist',  baseCost: 2, costMult: 1.5, maxLevel: 3, effect: 15 },
+    oilCapacity: { label: 'Oil Capacity', baseCost: 3, costMult: 2.0, maxLevel: 2, effect: 25 },
+    speedBoost:  { label: 'Speed Boost',  baseCost: 3, costMult: 2.0, maxLevel: 2, effect: 0.15 },
   },
 
   // ─── Juice / Effects ───
@@ -99,4 +99,20 @@ const CFG = {
   HIT_INVULN_TIME: 0.5,
   HAPTIC_SWAT: [100, 30, 60],
   HAPTIC_HIT: 50,
+
+  // ─── Arcade High Scores (pre-seeded with tester names) ───
+  DEFAULT_SCORES: [
+    { name: 'JAK',  time: 43, stage: 3 },
+    { name: 'BEN',  time: 48, stage: 3 },
+    { name: 'STI',  time: 52, stage: 3 },
+    { name: 'DAI',  time: 55, stage: 3 },
+    { name: 'MAR',  time: 58, stage: 3 },
+    { name: 'CHE',  time: 62, stage: 3 },
+    { name: 'NOK',  time: 67, stage: 3 },
+    { name: 'ANG',  time: 71, stage: 2 },
+    { name: 'SAK',  time: 74, stage: 2 },
+    { name: 'MAN',  time: 78, stage: 3 },
+    { name: 'LAR',  time: 85, stage: 2 },
+    { name: 'ART',  time: 90, stage: 2 },
+  ],
 };

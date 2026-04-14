@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>🍤 Shrimp Fried Rice — GDC Alt. Ctrl. Prototype</title>
+<title>Shrimp Fried Rice — GDC Alt. Ctrl. Prototype</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -14,27 +14,122 @@
 <!-- ═══ TITLE SCREEN — Game-like redesign ═══ -->
 <div id="title-screen" class="screen">
   <div class="title-logo">
-    <div class="title-shrimp">🍤</div>
-    <h1>SHRIMP<br>FRIED<br>RICE</h1>
+    <canvas id="title-shrimp" width="80" height="50"></canvas>
+    <h1>SHRIMP<br>FRIED RICE</h1>
   </div>
-  <div class="subtitle">GDC Alt. Ctrl. Prototype&ensp;·&ensp;v0.5</div>
-  <div class="title-tagline">YOU ARE THE SHRIMP</div>
-  <div class="controls-info">
-    <div class="ctrl-row"><span class="ctrl-icon">📱</span> <strong>Tilt</strong> to slide</div>
-    <div class="ctrl-row"><span class="ctrl-icon">🫨</span> <strong>Shake</strong> to toss / swat</div>
-    <div class="ctrl-row"><span class="ctrl-icon">✨</span> Collect <strong>MSG</strong> to transform</div>
+  <div class="subtitle">GDC Alt. Ctrl. Prototype&ensp;·&ensp;v0.6</div>
+
+  <!-- Hidden relay-url for autoConnectRelay() -->
+  <input type="text" id="relay-url" value="" style="display:none">
+
+  <button onclick="startTutorial()" class="btn-cook" style="margin-top:36px">
+    COOK
+  </button>
+  <button onclick="autoConnectRelay()" id="relay-connect-btn" class="btn-relay" style="margin-top:18px">
+    GENERATE ROOM CODE
+  </button>
+
+  <!-- Room code display (shown after Generate Room Code is clicked) -->
+  <div id="relay-box" style="display:none; margin-top:14px; text-align:center;">
+    <div style="font-family:'Pixelify Sans',monospace; font-size:10px; color:#555; margin-bottom:6px; text-transform:uppercase; letter-spacing:2px;">ROOM CODE</div>
+    <div id="relay-code-display" style="font-family:'Pixelify Sans',monospace; font-size:30px; font-weight:700; color:#4cd964; letter-spacing:6px; text-shadow:2px 2px 0 rgba(0,0,0,0.7), 0 0 20px rgba(76,217,100,0.4);">----</div>
+    <div id="relay-qr" style="margin-top:10px; display:flex; justify-content:center;"></div>
+    <div id="relay-controller-url" style="font-size:9px; color:rgba(255,255,255,0.25); margin-top:6px; word-break:break-all; text-align:center; font-family:'Outfit',sans-serif;"></div>
   </div>
-  <button onclick="initGame()" class="btn-cook">
-    <span class="btn-flame">🔥</span> COOK <span class="btn-flame">🔥</span>
-  </button>
-  <button class="secondary" onclick="setupDesktopFallback()" style="margin-top:12px">
-    🖱️ DESKTOP MODE
-  </button>
+
+  <!-- Stacked score cards — click to open full leaderboard -->
+  <div class="score-card-stack" id="title-score-stack" onclick="showScoresScreen()"></div>
 </div>
 
-<!-- ═══ CALIBRATION SCREEN ═══ -->
+<!-- ═══ TUTORIAL SCREEN (Multi-step FTUE Walkthrough) ═══ -->
+<div id="tutorial-screen" class="screen" style="display:none">
+
+  <!-- Step 0: Welcome — single sentence -->
+  <div id="tut-step-0" class="tut-step">
+    <canvas id="tut-shrimp-preview" width="60" height="40" style="display:block; margin:0 auto 12px;"></canvas>
+    <p style="font-size:18px;color:rgba(255,255,255,.85);line-height:1.6">You are a <strong style="color:#f7c948">shrimp</strong> trapped in a sizzling wok.</p>
+  </div>
+
+  <!-- Step 1: HOLD → TILT — auto-advance phases -->
+  <div id="tut-step-1" class="tut-step" style="display:none">
+    <h2 id="tut-step-1-title">HOLD</h2>
+    <p id="tut-step-1-text">Hold your phone <strong>flat and still</strong>.</p>
+    <canvas id="tut-tilt-canvas" width="140" height="140"
+      style="border-radius:50%; border:2px solid rgba(255,255,255,0.12); margin:16px auto; display:block;"></canvas>
+    <div id="tut-tilt-nudge" class="tut-nudge"></div>
+  </div>
+
+  <!-- Step 2: FLICK & TOSS — minimal -->
+  <div id="tut-step-2" class="tut-step" style="display:none">
+    <h2>FLICK &amp; TOSS</h2>
+    <div id="tut-flick-wrap" class="tut-flick-wrap">
+      <div id="tut-flick-bar" class="tut-flick-bar"></div>
+    </div>
+    <div id="tut-flick-nudge" class="tut-nudge">Flick your phone upward</div>
+  </div>
+
+  <!-- Step 3: THE GOAL — items + mini gameplay demo -->
+  <div id="tut-step-3" class="tut-step tut-step-wide" style="display:none">
+    <h2>THE GOAL</h2>
+    <canvas id="tut-items-canvas" width="280" height="70"
+      style="display:block; margin:12px auto;"></canvas>
+    <canvas id="tut-demo-canvas" width="280" height="100"
+      style="display:block; margin:8px auto; border-radius:6px; border:2px solid rgba(255,255,255,0.08);"></canvas>
+    <div class="goal-cards">
+      <div class="goal-card goal-card-msg">
+        <span class="goal-icon">✦</span>
+        <div><strong>Collect 5 MSG crystals</strong><br><span>to complete the stage</span></div>
+      </div>
+      <div class="goal-card goal-card-oil">
+        <span class="goal-icon">◉</span>
+        <div><strong>Grab oil to stay slippery</strong><br><span>it's also your health</span></div>
+      </div>
+      <div class="goal-card goal-card-danger">
+        <span class="goal-icon">✕</span>
+        <div><strong>Avoid the red hazards</strong><br><span>they drain your oil fast</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: FLICK UP — calibration, no body text -->
+  <div id="tut-step-4" class="tut-step" style="display:none">
+    <h2>FLICK UP</h2>
+    <div class="cal-progress" style="margin-top:16px">
+      <div class="cal-dot" id="tut-cal-dot-0"></div>
+      <div class="cal-dot" id="tut-cal-dot-1"></div>
+      <div class="cal-dot" id="tut-cal-dot-2"></div>
+      <div class="cal-dot" id="tut-cal-dot-3"></div>
+      <div class="cal-dot" id="tut-cal-dot-4"></div>
+    </div>
+    <div id="tut-cal-hint" class="flick-cta">
+      <div class="phone-throw-anim">
+        <div class="phone-throw-hand">✊</div>
+        <div class="phone-throw-body">
+          <div class="phone-throw-speaker"></div>
+          <div class="phone-throw-screen"></div>
+        </div>
+        <div class="phone-throw-arrow">↑</div>
+      </div>
+      <div id="tut-cal-count" class="flick-remaining">5 left</div>
+    </div>
+    <button class="secondary" onclick="skipTutorialCalibration()" style="margin-top:16px;font-size:12px">Skip (use defaults)</button>
+    <button id="tut-use-saved-btn" class="secondary" onclick="useSavedCalibration()" style="display:none;margin-top:8px;font-size:12px;color:#f7c948">Use saved calibration</button>
+  </div>
+
+  <!-- Progress dots -->
+  <div class="tut-dots">
+    <div id="tut-dot-0" class="cal-dot done"></div>
+    <div id="tut-dot-1" class="cal-dot"></div>
+    <div id="tut-dot-2" class="cal-dot"></div>
+    <div id="tut-dot-3" class="cal-dot"></div>
+    <div id="tut-dot-4" class="cal-dot"></div>
+  </div>
+  <button id="tut-next-btn" onclick="nextTutorialStep()" class="btn-cook" style="margin-top:30px">NEXT</button>
+</div>
+
+<!-- ═══ CALIBRATION SCREEN (standalone fallback — shown only if tutorial skipped) ═══ -->
 <div id="calibration-screen" class="screen" style="display:none">
-  <h1 style="font-size:clamp(28px,5vw,40px)">📱 CALIBRATE</h1>
+  <h1 style="font-size:clamp(28px,5vw,40px)">CALIBRATE</h1>
   <div class="cal-instructions">
     Hold your phone flat and <strong>flick it upward</strong> 3 times.<br>
     This sets your personal toss &amp; swat sensitivity.
@@ -59,34 +154,56 @@
 </div>
 
 <!-- ═══ UPGRADE SHOP (between stages or mid-game) ═══ -->
+<!-- COMMENTED OUT: Upgrade shop is disabled until Endless Mode is implemented
 <div id="upgrade-screen" class="screen" style="display:none">
-  <h1 style="font-size:clamp(24px,5vw,36px)">🛒 UPGRADE SHOP</h1>
+  <h1 style="font-size:clamp(24px,5vw,36px)">UPGRADE SHOP</h1>
   <div class="upgrade-currency" id="upgrade-currency">MSG: <span>0</span></div>
   <div id="upgrade-list" class="upgrade-list"></div>
-  <button onclick="closeUpgradeShop()">CONTINUE →</button>
+  <button onclick="closeUpgradeShop()">CONTINUE</button>
+</div>
+-->
+<!-- Hidden placeholder so JS doesn't crash when referencing upgrade-screen -->
+<div id="upgrade-screen" class="screen" style="display:none"></div>
+
+<!-- ═══ NAME ENTRY (shown after victory/gameover) ═══ -->
+<div id="name-entry-screen" class="screen" style="display:none">
+  <div class="name-entry">
+    <h2>ENTER YOUR NAME</h2>
+    <input type="text" id="name-input" class="name-entry-input" maxlength="8" placeholder="NAME" autocomplete="off" autocapitalize="characters">
+    <div class="run-stats" id="run-stats"></div>
+    <button onclick="submitScore()" style="margin-top:20px">OK</button>
+  </div>
+</div>
+
+<!-- ═══ LEADERBOARD / HIGH SCORES ═══ -->
+<div id="scores-screen" class="screen" style="display:none">
+  <div class="scores-header">TOP SCORES</div>
+  <div id="scores-arcade" class="scores-arcade-wrap"></div>
+  <div class="scores-thanks" id="scores-thanks">
+    Thanks for testing my game!<br>You're helping me with a conference entry.
+  </div>
+  <button onclick="restartGame()" style="margin-top:16px">COOK AGAIN</button>
 </div>
 
 <!-- ═══ GAME OVER SCREEN ═══ -->
 <div id="gameover-screen" class="screen" style="display:none">
-  <h1 id="go-title">BURNT</h1>
+  <h1 id="go-title">BURNT!</h1>
   <div class="score-display" id="go-stats"></div>
   <div id="go-flavor" style="font-size:14px;opacity:.5;margin-top:12px;font-style:italic"></div>
-  <button onclick="restartGame()">COOK AGAIN</button>
+  <div id="go-beat-callout" style="margin-top:28px;font-size:11px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:2px;"></div>
+  <button onclick="restartGame()" style="margin-top:10px">COOK AGAIN</button>
+  <button class="secondary" onclick="showScoresScreen(null,false)" style="margin-top:20px">VIEW SCORES</button>
 </div>
 
 <!-- ═══ VICTORY SCREEN ═══ -->
 <div id="victory-screen" class="screen" style="display:none">
-  <h1>ORDER UP! 🍤👨‍🍳</h1>
+  <h1>ORDER UP!</h1>
   <div class="score-display" id="vic-stats"></div>
   <div style="font-size:14px;opacity:.5;margin-top:12px;font-style:italic">
     The shrimp fried the rice... became the chef... and defended the whole kitchen.
   </div>
-  <div style="font-size:11px;opacity:.35;margin-top:16px;line-height:1.6">
-    Special thanks to playtesters:<br>
-    Benny (iPhone 16 Pro) · Dain (iPhone 14 Pro) · Chelsea (iPhone 12)<br>
-    Angela (iPhone SE) · Manu (iPhone 16)
-  </div>
-  <button onclick="restartGame()">COOK AGAIN</button>
+  <button onclick="showNameEntry()">SUBMIT SCORE</button>
+  <button class="secondary" onclick="restartGame()" style="margin-top:8px">SKIP</button>
 </div>
 
 <!-- ═══ STAGE ANNOUNCEMENT ═══ -->
@@ -109,20 +226,20 @@
 
 <!-- ═══ Stage 3 HUD: Wave Info ═══ -->
 <div id="s3-hud" style="display:none">
-  <div id="s3-wave-info" style="color:#f7c948;font-size:13px;text-align:center;opacity:0.8">Swat the hands! Shake hard or tap!</div>
+  <div id="s3-wave-info" style="color:#f7c948;font-size:13px;text-align:center;opacity:0.8">Swat the hands away! Shake your phone hard or tap the screen!</div>
 </div>
 
-<div id="oil-label" class="bar-label">OIL LEVEL</div>
-<div id="oil-bar-wrap" class="bar-container"><div id="oil-bar" class="bar-fill"></div></div>
-<div id="chef-label" class="bar-label">CHEF</div>
-<div id="chef-bar-wrap" class="bar-container"><div id="chef-bar" class="bar-fill"></div></div>
+<div id="oil-label" class="bar-label" style="display:none">OIL LEVEL</div>
+<div id="oil-bar-wrap" class="bar-container" style="display:none"><div id="oil-bar" class="bar-fill"></div></div>
+<div id="chef-label" class="bar-label" style="display:none">CHEF</div>
+<div id="chef-bar-wrap" class="bar-container" style="display:none"><div id="chef-bar" class="bar-fill"></div></div>
 
 <!-- ═══ PHONE STATUS ═══ -->
 <div id="phone-status"></div>
 
 <!-- ═══ SENSOR DEBUG OVERLAY ═══ -->
 <div id="sensor-debug" style="display:none">
-  <div class="dbg-title">📡 SENSOR DEBUG</div>
+  <div class="dbg-title">SENSOR DEBUG</div>
   <div id="dbg-orient"></div>
   <div id="dbg-accel"></div>
   <div id="dbg-mag"></div>
@@ -130,10 +247,15 @@
   <div id="dbg-device"></div>
   <div id="dbg-perm"></div>
 </div>
-<button id="debug-toggle" onclick="toggleDebug()" class="dbg-btn">🐛</button>
+<button id="debug-toggle" onclick="toggleDebug()" class="dbg-btn">DBG</button>
 
 <canvas id="game-canvas"></canvas>
 
+<!-- ═══ MINI CONTROLLER OVERLAY (bottom-left, shows tilt position during gameplay) ═══ -->
+<canvas id="mini-ctrl-canvas" width="64" height="64" style="display:none"></canvas>
+
+<!-- QR code library (client-side, no external API calls) -->
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <!-- Config MUST load before game.js -->
 <script src="config.js"></script>
 <script src="game.js"></script>

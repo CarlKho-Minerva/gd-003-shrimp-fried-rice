@@ -1,0 +1,12 @@
+{
+  "name": "shrimp-fried-rice-relay",
+  "version": "1.0.0",
+  "description": "WebSocket relay server for Shrimp Fried Rice external controller",
+  "main": "relay-server.js",
+  "scripts": {
+    "start": "node relay-server.js"
+  },
+  "dependencies": {
+    "ws": "^8.19.0"
+  }
+}
