@@ -18,6 +18,33 @@ const { WebSocketServer } = require('ws');
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const BUILD_DIR = path.join(__dirname, 'build');
 
+// ── Upstash Redis persistence (optional — falls back to in-memory if env vars absent) ──
+const UPSTASH_URL   = process.env.UPSTASH_REDIS_REST_URL;
+const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+const SCORES_KEY    = 'sfr:scores';
+
+async function redisLoad() {
+  if (!UPSTASH_URL || !UPSTASH_TOKEN) return null;
+  try {
+    const r = await fetch(`${UPSTASH_URL}/get/${SCORES_KEY}`, {
+      headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
+    });
+    const data = await r.json();
+    return data.result ? JSON.parse(data.result) : null;
+  } catch { return null; }
+}
+
+async function redisSave(scores) {
+  if (!UPSTASH_URL || !UPSTASH_TOKEN) return;
+  try {
+    await fetch(UPSTASH_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(['SET', SCORES_KEY, JSON.stringify(scores)])
+    });
+  } catch {}
+}
+
 // ── In-memory Leaderboard ──
 const DEFAULT_SCORES = [
   { name: 'YUKI',   time: 28, stage: 1 },
@@ -27,6 +54,18 @@ const DEFAULT_SCORES = [
   { name: 'WOK',    time: 72, stage: 1 },
 ];
 let serverScores = DEFAULT_SCORES.map(s => ({ ...s }));
+
+// Load persisted scores on startup
+(async () => {
+  const stored = await redisLoad();
+  if (stored && stored.length > 0) {
+    serverScores = stored;
+    console.log(`[Scores] Loaded ${stored.length} scores from Redis`);
+  } else if (UPSTASH_URL) {
+    await redisSave(serverScores);
+    console.log('[Scores] Seeded default scores to Redis');
+  }
+})();
 
 // ── MIME Types ──
 const MIME = {
@@ -69,6 +108,7 @@ const server = http.createServer((req, res) => {
         serverScores.push({ name, time, stage });
         serverScores.sort((a, b) => a.time - b.time);
         if (serverScores.length > 50) serverScores = serverScores.slice(0, 50);
+        redisSave(serverScores); // fire-and-forget persistence
         res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
         res.end(JSON.stringify({ ok: true }));
       } catch {
