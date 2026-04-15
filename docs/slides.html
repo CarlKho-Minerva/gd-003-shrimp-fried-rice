@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shrimp Fried Rice — GD-003 Final</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --gold:   #f5c842;
+    --coral:  #ff7c5c;
+    --white:  #f0eafe;
+    --dim:    rgba(240,234,254,.55);
+    --bg:     #08060e;
+    --card:   rgba(255,255,255,.05);
+    --border: rgba(255,255,255,.10);
+  }
+
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); font-family: 'Outfit', sans-serif; color: var(--white); }
+
+  /* ── Slide container ── */
+  #deck { width: 100vw; height: 100vh; position: relative; }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 60px 80px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.4s ease;
+  }
+  .slide.active { opacity: 1; pointer-events: auto; }
+
+  /* ── Bg noise grain ── */
+  .slide::before {
+    content: '';
+    position: fixed; inset: 0; z-index: -1;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(120,80,200,.18) 0%, transparent 70%),
+                var(--bg);
+  }
+
+  /* ── Typography ── */
+  .tag     { font-size: 11px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); margin-bottom: 16px; }
+  h1       { font-size: clamp(52px, 8vw, 96px); font-weight: 900; line-height: 1; letter-spacing: -2px; text-align: center; }
+  h2       { font-size: clamp(28px, 4vw, 48px); font-weight: 700; line-height: 1.15; text-align: center; }
+  h3       { font-size: clamp(16px, 2vw, 22px); font-weight: 600; color: var(--dim); text-align: center; margin-top: 8px; }
+  p        { font-size: clamp(16px, 1.8vw, 22px); line-height: 1.6; color: var(--dim); text-align: center; }
+  .big     { font-size: clamp(22px, 3vw, 36px); color: var(--white); font-weight: 600; line-height: 1.35; }
+  .gold    { color: var(--gold); }
+  .coral   { color: var(--coral); }
+  .mono    { font-family: 'Courier New', monospace; letter-spacing: 0; }
+
+  /* ── Layout helpers ── */
+  .row     { display: flex; gap: 24px; align-items: stretch; width: 100%; max-width: 1100px; }
+  .col     { display: flex; flex-direction: column; gap: 16px; flex: 1; }
+  .center  { align-items: center; }
+  .gap32   { gap: 32px; }
+  .mt24    { margin-top: 24px; }
+  .mt40    { margin-top: 40px; }
+
+  /* ── Card ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px 32px;
+    flex: 1;
+  }
+  .card-title { font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--gold); margin-bottom: 12px; }
+  .card p     { text-align: left; font-size: 16px; line-height: 1.6; color: var(--dim); }
+  .card .big  { text-align: left; font-size: 20px; }
+
+  /* ── Big stat ── */
+  .stat { text-align: center; }
+  .stat-num { font-size: clamp(42px, 6vw, 72px); font-weight: 900; line-height: 1; color: var(--gold); }
+  .stat-label { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--dim); margin-top: 6px; }
+
+  /* ── Pill list ── */
+  .pill-list { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 8px; }
+  .pill {
+    padding: 8px 20px; border-radius: 100px;
+    background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15);
+    font-size: 15px; font-weight: 600; color: var(--white); letter-spacing: .5px;
+  }
+  .pill.gold   { background: rgba(245,200,66,.12); border-color: rgba(245,200,66,.35); color: var(--gold); }
+  .pill.coral  { background: rgba(255,124,92,.1);  border-color: rgba(255,124,92,.3);  color: var(--coral); }
+  .pill.green  { background: rgba(76,217,100,.10); border-color: rgba(76,217,100,.35); color: #4cd964; }
+
+  /* ── Pipeline diagram ── */
+  .pipeline { display: flex; align-items: center; gap: 0; margin-top: 8px; }
+  .pipe-node {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 24px; text-align: center;
+  }
+  .pipe-node .icon  { font-size: 28px; }
+  .pipe-node .label { font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim); margin-top: 4px; }
+  .pipe-node .sub   { font-size: 11px; color: rgba(240,234,254,.3); margin-top: 2px; }
+  .pipe-arrow { font-size: 22px; color: rgba(255,255,255,.2); padding: 0 12px; flex-shrink: 0; }
+
+  /* ── QR placeholder ── */
+  .qr-block {
+    width: 160px; height: 160px; border-radius: 16px;
+    background: #fff; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: #333; text-align: center; padding: 12px;
+    flex-shrink: 0;
+  }
+
+  /* ── Dot grid decoration ── */
+  .dot-grid {
+    position: absolute; inset: 0; z-index: -1; pointer-events: none;
+    background-image: radial-gradient(rgba(255,255,255,.06) 1px, transparent 1px);
+    background-size: 36px 36px;
+    -webkit-mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, black 30%, transparent 100%);
+    mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, black 30%, transparent 100%);
+  }
+
+  /* ── Corner decoration ── */
+  .corner { position: absolute; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(255,255,255,.2); }
+  .tl { top: 28px; left: 36px; }
+  .tr { top: 28px; right: 36px; text-align: right; }
+  .bl { bottom: 28px; left: 36px; }
+  .br { bottom: 28px; right: 36px; text-align: right; }
+
+  /* ── Progress dots ── */
+  #progress {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 8px; z-index: 100;
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.2); transition: background .3s; }
+  .dot.on { background: var(--gold); }
+
+  /* ── Shrimp emoji big ── */
+  .hero-emoji { font-size: clamp(64px, 10vw, 120px); line-height: 1; }
+
+  /* Slide-specific overrides */
+  #s-title h1 { background: linear-gradient(135deg, #fff 30%, var(--gold) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  #s-title h3 { font-size: 18px; margin-top: 20px; }
+
+  /* Highlight box */
+  .highlight {
+    background: rgba(245,200,66,.08); border: 1px solid rgba(245,200,66,.25);
+    border-radius: 12px; padding: 20px 28px; max-width: 800px;
+    font-size: clamp(18px, 2.2vw, 26px); font-weight: 600; text-align: center; line-height: 1.4; color: var(--white);
+  }
+
+  /* Green dot status */
+  .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #4cd964; box-shadow: 0 0 8px #4cd964; margin-right: 8px; animation: pulse-dot 2s ease-in-out infinite; }
+  @keyframes pulse-dot { 0%,100%{opacity:1;box-shadow:0 0 8px #4cd964} 50%{opacity:.5;box-shadow:0 0 16px #4cd964} }
+
+  /* Numbered list */
+  .num-list { list-style: none; display: flex; flex-direction: column; gap: 16px; max-width: 780px; }
+  .num-list li { display: flex; gap: 20px; align-items: flex-start; }
+  .num { width: 36px; height: 36px; border-radius: 50%; background: rgba(245,200,66,.15); border: 1px solid rgba(245,200,66,.35); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; color: var(--gold); flex-shrink: 0; }
+  .num-list .text { font-size: 18px; line-height: 1.5; color: var(--dim); padding-top: 6px; }
+  .num-list strong { color: var(--white); }
+
+  /* Two-col split */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; width: 100%; max-width: 1000px; align-items: start; }
+  .split-label { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--gold); margin-bottom: 10px; font-weight: 700; }
+  .split-item { font-size: 16px; color: var(--dim); line-height: 1.7; }
+  .split-item strong { color: var(--white); }
+</style>
+</head>
+<body>
+
+<div id="deck">
+
+  <!-- ── SLIDE 1: Title ── -->
+  <div class="slide active" id="s-title">
+    <div class="dot-grid"></div>
+    <div class="corner tl">GD-003 · Final Project</div>
+    <div class="corner tr">Minerva University · 2026</div>
+    <div class="corner br">Carl Kho</div>
+
+    <div class="hero-emoji">🍤</div>
+    <h1 style="margin-top:20px">SHRIMP FRIED RICE</h1>
+    <h3>A GDC Alt.Ctrl. Prototype — Your Phone is the Wok</h3>
+    <div class="pill-list" style="margin-top:28px">
+      <span class="pill green"><span class="status-dot"></span>Live Now</span>
+      <span class="pill">WebSocket Relay</span>
+      <span class="pill">Phone Sensors</span>
+      <span class="pill gold">Stage 1 Complete</span>
+    </div>
+    <p style="margin-top:24px;font-size:14px" class="mono">gd-003-shrimp-fried-rice.onrender.com</p>
+  </div>
+
+  <!-- ── SLIDE 2: One-liner ── -->
+  <div class="slide" id="s-concept">
+    <div class="dot-grid"></div>
+    <div class="corner tl">The Concept</div>
+
+    <div class="tag">design brief</div>
+    <h2 style="max-width:820px;margin-bottom:32px">The wok is the controller.<br>The shrimp is you.</h2>
+    <div class="highlight">
+      Tilt your phone to move. Flick to jump.<br>Collect MSG. Dodge hazards. <span class="gold">Don't get cooked.</span>
+    </div>
+    <p style="margin-top:32px;max-width:660px">
+      The player holds the exact object their character is trapped inside.
+      When you tilt it — you're not pressing a button, you're tilting the world.
+      That's the design argument.
+    </p>
+  </div>
+
+  <!-- ── SLIDE 3: 3-Stage structure ── -->
+  <div class="slide" id="s-stages">
+    <div class="dot-grid"></div>
+    <div class="corner tl">Game Design</div>
+
+    <div class="tag">3-stage arc</div>
+    <h2 style="margin-bottom:36px">Same Wok, Different Meaning</h2>
+
+    <div class="row" style="max-width:1000px">
+      <div class="card">
+        <div class="card-title">🍤 Stage 1 — The Shrimp</div>
+        <p>You're being cooked. Tilt to dodge hazards, collect MSG to progress, grab oil to survive. Wok toss = jump.</p>
+        <div class="pill-list" style="justify-content:flex-start;margin-top:16px"><span class="pill green">✓ Shipped</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title">👨‍🍳 Stage 2 — The Chef's Hand</div>
+        <p>A giant hand reaches into the wok. Swat it away. Same tilt input, opposite intent — now you're fighting back.</p>
+        <div class="pill-list" style="justify-content:flex-start;margin-top:16px"><span class="pill">In Design</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🔄 Stage 3 — Role Reversal</div>
+        <p>You become the chef. The game flips its camera. Same controller, same gestures — completely different meaning.</p>
+        <div class="pill-list" style="justify-content:flex-start;margin-top:16px"><span class="pill">In Design</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 4: Stage 1 breakdown ── -->
+  <div class="slide" id="s-s1">
+    <div class="dot-grid"></div>
+    <div class="corner tl">Stage 1 — Shipped</div>
+
+    <div class="tag">gameplay mechanics</div>
+    <h2 style="margin-bottom:36px">What You Do</h2>
+
+    <div class="row" style="max-width:920px">
+      <div class="card center" style="text-align:center">
+        <div style="font-size:40px;margin-bottom:12px">↕️</div>
+        <div class="card-title">Tilt</div>
+        <p>Phone tilt = shrimp movement along the wok surface. Smooth analog control via DeviceOrientation API.</p>
+      </div>
+      <div class="card center" style="text-align:center">
+        <div style="font-size:40px;margin-bottom:12px">🪃</div>
+        <div class="card-title">Flick to Jump</div>
+        <p>Rapid upward flick launches the shrimp. Small arc movement preserved mid-air — feels like a real toss.</p>
+      </div>
+      <div class="card center" style="text-align:center">
+        <div style="font-size:40px;margin-bottom:12px">💎</div>
+        <div class="card-title">Collect MSG</div>
+        <p>5 MSG crystals = stage complete. Grab oil drops to refill health. Dodge red hazards or lose oil.</p>
+      </div>
+    </div>
+
+    <div class="pill-list" style="margin-top:28px">
+      <span class="pill gold">Onboarding tutorial</span>
+      <span class="pill">Procedural audio</span>
+      <span class="pill">Screen shake</span>
+      <span class="pill">Persistent leaderboard</span>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 5: Sensor pipeline ── -->
+  <div class="slide" id="s-pipeline">
+    <div class="dot-grid"></div>
+    <div class="corner tl">Technical</div>
+
+    <div class="tag">sensor pipeline</div>
+    <h2 style="margin-bottom:12px">Phone → Game in &lt;30ms</h2>
+    <p style="margin-bottom:36px">No app to install. Just open a URL on your phone.</p>
+
+    <div class="pipeline">
+      <div class="pipe-node">
+        <div class="icon">📱</div>
+        <div class="label">Phone</div>
+        <div class="sub">DeviceOrientation</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-node">
+        <div class="icon">🔌</div>
+        <div class="label">WebSocket</div>
+        <div class="sub">wss://onrender.com</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-node">
+        <div class="icon">☁️</div>
+        <div class="label">Relay Server</div>
+        <div class="sub">Node.js · Room codes</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-node">
+        <div class="icon">🖥️</div>
+        <div class="label">Display</div>
+        <div class="sub">Canvas · 60fps</div>
+      </div>
+    </div>
+
+    <div class="row gap32 mt40" style="max-width:900px">
+      <div class="card">
+        <div class="card-title">How it connects</div>
+        <p>Display generates a 4-digit room code + QR. Phone scans QR → opens controller.html → WebSocket joins room → sensor data flows in real-time.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">v2 Hardware path</div>
+        <p>ESP32 + MPU-6050 gyroscope + 4 piezo discs. Sends the same JSON sensor events over WebSocket. Same server, same game — no code changes needed.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 6: Stack ── -->
+  <div class="slide" id="s-stack">
+    <div class="dot-grid"></div>
+    <div class="corner tl">Technical</div>
+
+    <div class="tag">full stack</div>
+    <h2 style="margin-bottom:32px">Zero Framework. Zero Build Step.</h2>
+
+    <div class="split">
+      <div>
+        <div class="split-label">Frontend</div>
+        <div class="split-item">
+          <strong>Vanilla HTML / CSS / JS</strong> — no React, no bundler.<br>
+          Single <code>game.js</code>, single <code>style.css</code>.<br>
+          Canvas 2D for all rendering.<br>
+          Web Audio API for procedural sound.
+        </div>
+      </div>
+      <div>
+        <div class="split-label">Server</div>
+        <div class="split-item">
+          <strong>Node.js · serve.js</strong> — one file, one port (3000).<br>
+          HTTP static file server + WebSocket relay.<br>
+          No Express. No framework.<br>
+          < 230 lines of code total.
+        </div>
+      </div>
+      <div>
+        <div class="split-label">Hosting</div>
+        <div class="split-item">
+          <strong>Render free tier</strong> — auto-deploys on GitHub push.<br>
+          <strong>UptimeRobot</strong> — pings <code>/health</code> every 5 min.<br>
+          Zero cold starts during sessions.
+        </div>
+      </div>
+      <div>
+        <div class="split-label">Persistence</div>
+        <div class="split-item">
+          <strong>Upstash Redis</strong> — free cloud KV store.<br>
+          Leaderboard survives restarts + redeploys.<br>
+          REST API only — no SDK, no connection pool.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 7: Infrastructure ── -->
+  <div class="slide" id="s-infra">
+    <div class="dot-grid"></div>
+    <div class="corner tl">Infrastructure</div>
+
+    <div class="tag">always live</div>
+    <h2 style="margin-bottom:12px">How the Server Stays Warm</h2>
+    <p style="margin-bottom:36px">Render free tier sleeps after 15 minutes of inactivity. This is how we defeated that.</p>
+
+    <div class="row" style="max-width:960px">
+      <div class="card">
+        <div class="card-title">🤖 UptimeRobot</div>
+        <p>Pings <code>/health</code> every <strong>5 minutes</strong>. Free. No response-size limit. Only checks HTTP 200 — not the body. Render never reaches the 15-min sleep threshold.</p>
+        <div class="pill-list" style="justify-content:flex-start;margin-top:12px"><span class="pill green">✓ Live</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title">💾 Upstash Redis</div>
+        <p>Leaderboard stored as a JSON blob at key <code>sfr:scores</code>. On every score submission, data is written to Redis. On server restart, it loads back. <strong>Scores never reset.</strong></p>
+        <div class="pill-list" style="justify-content:flex-start;margin-top:12px"><span class="pill green">✓ Connected</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 Public Status Page</div>
+        <p>Live uptime dashboard. 100% uptime display. Shareable URL for demos and submissions to show judges the server is production-grade.</p>
+        <p style="margin-top:10px" class="mono" style="font-size:12px">stats.uptimerobot.com<br>/9mdhaV2mYt</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 8: Leaderboard ── -->
+  <div class="slide" id="s-scores">
+    <div class="dot-grid"></div>
+    <div class="corner tl">Live Leaderboard</div>
+
+    <div class="tag">persistent · shared · real-time</div>
+    <h2 style="margin-bottom:32px">Every Score Remembered</h2>
+
+    <div class="row" style="max-width:800px;align-items:center;gap:48px">
+      <div class="col">
+        <ul class="num-list">
+          <li><div class="num">1</div><div class="text"><strong>Player submits score</strong> — name + time + stage</div></li>
+          <li><div class="num">2</div><div class="text">Server adds to <strong>in-memory list</strong> → instant response</div></li>
+          <li><div class="num">3</div><div class="text"><strong>Fire-and-forget write</strong> to Upstash Redis REST API</div></li>
+          <li><div class="num">4</div><div class="text">On <strong>any restart or redeploy</strong>, scores load back from Redis</div></li>
+          <li><div class="num">5</div><div class="text">Every device, every session, every player — <strong>one unified board</strong></div></li>
+        </ul>
+      </div>
+      <div class="col center" style="gap:20px;max-width:260px">
+        <div class="stat"><div class="stat-num">50</div><div class="stat-label">Max scores stored</div></div>
+        <div class="stat"><div class="stat-num">∞</div><div class="stat-label">Sessions remembered</div></div>
+        <div class="stat"><div class="stat-num">$0</div><div class="stat-label">Monthly cost</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 9: Play Now ── -->
+  <div class="slide" id="s-play">
+    <div class="dot-grid"></div>
+    <div class="corner tl">Demo</div>
+
+    <div class="tag">try it right now</div>
+    <h2 style="margin-bottom:8px">Your Phone. Your Wok.</h2>
+    <p style="margin-bottom:32px">Open the game on the laptop. Scan with your phone. No app needed.</p>
+
+    <div class="row" style="max-width:880px;align-items:center">
+      <div class="card" style="text-align:center">
+        <div class="card-title">🖥️ Game (Open on Laptop)</div>
+        <p class="mono" style="font-size:18px;color:var(--white);margin:12px 0">gd-003-shrimp-fried-rice<br>.onrender.com</p>
+        <p>Click "GENERATE ROOM CODE" — a QR appears on screen</p>
+      </div>
+      <div class="card" style="text-align:center">
+        <div class="card-title">📱 Controller (Scan on Phone)</div>
+        <p>Scan the QR code on screen. Enter the room code. Hold your phone flat like a wok. Tilt to move. Flick up to jump.</p>
+        <div class="pill-list" style="justify-content:center;margin-top:16px"><span class="pill green"><span class="status-dot"></span>Server Up</span></div>
+      </div>
+    </div>
+
+    <div class="highlight" style="margin-top:28px;font-size:18px">
+      No Bluetooth. No USB. No app install. Just <span class="gold">a URL and a 4-digit code.</span>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 10: What's Next ── -->
+  <div class="slide" id="s-next">
+    <div class="dot-grid"></div>
+    <div class="corner tl">Roadmap</div>
+
+    <div class="tag">next</div>
+    <h2 style="margin-bottom:36px">Shrimp Fried Rice v1.0</h2>
+
+    <div class="row" style="max-width:960px">
+      <div class="card">
+        <div class="card-title">🎮 Stage 2 + 3</div>
+        <p>Chef's hand swat mechanic. Role reversal sequence. Full 3-act arc — one story told through gesture.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">📱 Android APK</div>
+        <p>Capacitor WebView wrapping the controller URL. Distributed via QR for class demos without browser friction.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🔧 ESP32 Hardware</div>
+        <p>Real wok with ESP32 + MPU-6050 + 4 piezo discs. Same WebSocket API — plug in without changing a line of game code.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">🏆 GDC Alt. Ctrl. 2027</div>
+        <p>Full Loom submission. Hardware prototype on a real wok handle. "Does the physicality change what the game means?" — yes.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SLIDE 11: Thank you ── -->
+  <div class="slide" id="s-thanks">
+    <div class="dot-grid"></div>
+    <div class="corner bl">GD-003 · Final Project · Minerva University · 2026</div>
+    <div class="corner br">Carl Kho</div>
+
+    <div class="hero-emoji">🍤</div>
+    <h1 style="margin-top:16px">Thanks.</h1>
+    <h3 style="margin-top:16px;font-size:20px">Now hand me your phone.</h3>
+
+    <div class="row gap32 mt40" style="max-width:800px;align-items:stretch">
+      <div class="card" style="text-align:center">
+        <div class="card-title">▶ Play</div>
+        <p class="mono" style="color:var(--white);font-size:15px">gd-003-shrimp-fried-rice.onrender.com</p>
+      </div>
+      <div class="card" style="text-align:center">
+        <div class="card-title">📊 Status</div>
+        <p class="mono" style="color:var(--white);font-size:15px">stats.uptimerobot.com/9mdhaV2mYt</p>
+      </div>
+      <div class="card" style="text-align:center">
+        <div class="card-title">💻 Source</div>
+        <p class="mono" style="color:var(--white);font-size:15px">github.com/CarlKho-Minerva/gd-003-shrimp-fried-rice</p>
+      </div>
+    </div>
+  </div>
+
+</div><!-- #deck -->
+
+<!-- Progress dots -->
+<div id="progress"></div>
+
+<script>
+  const slides = [...document.querySelectorAll('.slide')];
+  let cur = 0;
+
+  // Build dots
+  const prog = document.getElementById('progress');
+  slides.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' on' : '');
+    d.addEventListener('click', () => goTo(i));
+    prog.appendChild(d);
+  });
+
+  function goTo(n) {
+    slides[cur].classList.remove('active');
+    prog.children[cur].classList.remove('on');
+    cur = Math.max(0, Math.min(n, slides.length - 1));
+    slides[cur].classList.add('active');
+    prog.children[cur].classList.add('on');
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'ArrowDown') { e.preventDefault(); goTo(cur + 1); }
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')  { e.preventDefault(); goTo(cur - 1); }
+    if (e.key === 'Home') goTo(0);
+    if (e.key === 'End')  goTo(slides.length - 1);
+  });
+
+  // Touch swipe
+  let tx = 0;
+  document.addEventListener('touchstart', e => { tx = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend',   e => {
+    const dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dx) > 50) goTo(dx < 0 ? cur + 1 : cur - 1);
+  }, { passive: true });
+</script>
+</body>
+</html>
