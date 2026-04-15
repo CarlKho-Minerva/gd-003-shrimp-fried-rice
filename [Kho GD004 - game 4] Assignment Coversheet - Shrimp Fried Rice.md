@@ -5,56 +5,56 @@ https://docs.google.com/document/d/14i_sCoHF4eGbvvUeoiRJ26tLTpeNhFg4Dhc-7Ph1hlM/
 | **[Carl Vincent Kho](mailto:kho@uni.minerva.edu)** |  | **7 (v0.7)** | **Apr 15, 2026** |
 | **Individual Portfolio**  |  |  |  |
 | **Notion Journal** |  |  |  |
-| **Github Repository** | [https://github.com/CarlKho-Minerva/ShrimpFriedRice/](https://github.com/CarlKho-Minerva/ShrimpFriedRice/)  |  |  |
+| **Github Repository** | [https://github.com/CarlKho-Minerva/gd-003-shrimp-fried-rice](https://github.com/CarlKho-Minerva/gd-003-shrimp-fried-rice)  |  |  |
 | **Itch.io Links** | [play](https://carlcrafterz.itch.io/shrimp-fried-rice) |  |  |
 | **Live Game** | [gd-003-shrimp-fried-rice.onrender.com](https://gd-003-shrimp-fried-rice.onrender.com) |  |  |
 | **GDC Slides** | [/docs/slides.html](docs/slides.html) |  |  |
-| **Other Materials** | Looms in portfolio page; [Portfolio Site](../portfolio/shrimp-fried-rice.html); [Wok Controller Instructable](docs/instructables_wok_controller.html); [Medium Post](docs/MEDIUM_POST.md) |  |  |
+| **Other Materials** | Looms in portfolio page; [Portfolio Site](../portfolio/shrimp-fried-rice.html); [Wok Controller Instructable](docs/instructables_wok_controller.html); [Medium Post (GD-003)](docs/MEDIUM_POST.md); [Medium Post (GD-004)](docs/gd004/MEDIUM_POST.md) |  |  |
 | **HCs Tagged (max 3\)** | `#designthinking`, `#medium`, `#multimodalcommunication` |  |  |
 
 Each time you upload a new version of your portfolio, complete the following:
 
 1. **Without reference to scores or learning outcomes, describe in 1-2 sentences how the class has been going for you so far.**
 
-   This iteration forced me to confront the gap between "the game works" and "the game works for someone who's never seen it." Preparing GDC presentation materials — slides and a presenter script — made me articulate design decisions I had only previously understood intuitively: why the controller IS the narrative, why the sensor pipeline had to be zero-friction, and what the "aha moment" actually is and when it reliably happens.
-
-   The infrastructure work this cycle (persistent leaderboard via Upstash Redis, UptimeRobot keep-warm replacing a failed cron solution) also made me appreciate that deployment reliability is itself a design decision. A game that goes cold during a GDC demo has a broken user experience regardless of how good the mechanics are.
+   I spent most of this cycle not writing game code. I was debugging a cron job that failed 26 times before I understood why, setting up a Redis database so a playtester's score would survive a redeploy, and figuring out that Render's free tier serves a Cloudflare HTML page before Node.js boots. The thing I kept coming back to was this: making the game work in class was a code problem, but making it work on the internet without me in the room was a completely different kind of problem.
 
 2. **Describe your weekly process. What has been effective? What are you planning to change?**
 
-   This round was primarily polish and production-readiness rather than new mechanics. v0.7 added three things driven by playtester friction: MSG crystal breathing animation (objects that pulse feel collectible in a way static ones don't), the ROOM ACTIVE badge replacing a pressable button (players were clicking it expecting something to happen), and a skip/next button for tutorial step 3 (players were stuck waiting for auto-advance).
+   The first week was the scope decision. I had three stages designed. Stage 2 (chef's hand) and Stage 3 (role reversal) existed as design documents and partially-built prototypes. I cut both and committed to shipping Stage 1 properly. This was not a fun decision. The three-stage arc is the actual design argument of the game. But Stage 1 was finished, and Stages 2 and 3 weren't, and I'd rather ship something complete than demo something half-built.
 
-   The infrastructure track ran in parallel: moved from cron-job.org (failed with "output too large" — Render's cold-start HTML page is large enough to trip cron-job's response-size limit) to UptimeRobot, which checks HTTP status only and never auto-disables. Upstash Redis replaced in-memory leaderboard storage — scores now survive any restart or redeploy. The REST-only API approach (no SDK, just `fetch`) keeps the server at 230 lines with zero new dependencies.
+   Week two was infrastructure. Deploying to Render was straightforward until I learned about the sleep problem. Free instances go cold after 15 minutes. I set up cron-job.org to ping `/health` every 5 minutes. It failed. 26 times. Auto-disabled. The error said "output too large." Took me a day to realize: Render's cold-start page is a large Cloudflare HTML response, and cron-job.org has a body size limit. Switched to UptimeRobot, which only checks the status code. Hasn't failed since.
 
-   What was effective: treating production infrastructure as a design problem, not an ops problem. What I'd change: starting the GDC slide/script preparation earlier — the process of explaining the design to an audience revealed gaps in how the game frames itself.
+   Week three was the leaderboard and polish. Someone asked "Can I send my score to my friend?" during a playtest. I didn't have persistence. Upstash Redis was the fix: REST API only, no SDK, just `fetch`. Scores now survive restarts and redeploys. The v0.7 polish was small stuff that mattered more than I expected: MSG crystals breathing so they're visible, the ROOM ACTIVE button becoming a non-clickable badge (people kept pressing it), and a skip button on the tutorial.
+
+   What worked: treating the infrastructure decisions like design decisions. What I'd change: I should have started the deployment work two weeks earlier. Every day spent running ngrok in class was a day the game wasn't testable outside my presence.
 
 3. **Which course objective is most worrying to you? Who is a classmate you think exemplifies this skill?**
 
-   "Showing, not telling, why the physical controller matters." The slides and script are now polished, but the real test is the 30 seconds between someone picking up the phone and them understanding the loop — without me explaining anything. The tutorial covers the mechanics, but not the emotional core: *you are the wok, not just holding a controller*.
+   Communicating the game's design to someone who isn't holding the phone. The GDC slides are done, the script is written, but the hardest thing to convey is what it feels like when you realize you're the wok. I can't put that in a tutorial. The game relies on physics to deliver that realization, which worked during playtests but is a bet, not a guarantee.
 
-   **Classmate:** [insert name] — their project achieved immediate physical intuition without a tutorial, which is the benchmark I'm still reaching toward.
+   **Classmate:** [insert name] — their project didn't need an explanation. Physical intuition was immediate. I'm still trying to get there.
 
 4. **Explain how this class will help in future endeavors.**
 
-   The infrastructure pattern I built this cycle — zero-cost, zero-dependencies, REST-only, stateless-with-Redis persistence — is reusable for any future rapid prototype that needs to be publicly demo-able. More specifically, the UptimeRobot + Render stack is portable to any serverless-hostile free tier that needs to stay warm. I documented the failure mode (cron-job.org + Render = "output too large") so future projects don't repeat it.
+   The three-service stack I built (Render hosting, UptimeRobot monitoring, Upstash Redis persistence) costs nothing and runs without me. I'm going to reuse this exact setup for SOMACH (my capstone, sub-vocal brain-computer interface). Both projects have the same core problem: getting a noisy signal from a physical sensor into a browser and making it mean something. The wok uses a 3-flick calibration routine to normalize accelerometer spikes. SOMACH uses a similar protocol to normalize EMG electrode readings from the throat. I noticed this halfway through building the calibration screen. The sensor normalization pattern transferred directly.
 
-   The GDC presentation preparation revealed something more useful: the ability to defend design decisions under time pressure to a technically literate audience. That skill — knowing *why* I chose WebSocket over Bluetooth, why I chose REST over SDK, why I chose Canvas over WebGL — transfers to any project where I have to justify architectural choices to judges, investors, or collaborators. Preparing these materials made the reasoning explicit in a way that in-project decisions never do.
+   Preparing the GDC presentation also taught me something I didn't expect. Building slides about the design forced me to actually say, out loud, why every technical decision was made. Why WebSocket over Bluetooth (latency and zero pairing). Why no framework (230 lines doesn't need React). Why REST over SDK (zero dependencies on a free tier). I knew these reasons, but I'd never had to defend them to an audience. That's a different skill from just making the choices.
 
 5. **For each HC you tagged above, describe how it is related to the topic at hand. Alternatively, if your learning on this topic changed your understanding of an HC, or you think it's a bad fit, explain that mismatch instead.**
 
-   **#designthinking:** Every v0.7 change came from watching people use the game, not from theory. The ROOM ACTIVE badge existed because a tester clicked the "ROOM ACTIVE" button expecting a UI response. The tutorial skip button existed because I watched a tester sit confused waiting for auto-advance. The MSG breathing animation came from noticing that players often missed crystals that were visually static against the dark background. Iteration driven by observed friction — not planned in advance, not guessed.
+   **#designthinking:** The biggest design decision this cycle was cutting content, not adding it. Dropping Stage 2 and Stage 3 let me focus on making one complete thing instead of three incomplete things. Every other v0.7 change came from watching a specific person get stuck on a specific thing: crystals being invisible (added breathing animation), the ROOM ACTIVE button looking clickable (changed it to a badge), the tutorial making people wait (added skip). None of these were on a roadmap. They came from sitting in the room and watching.
 
-   **#medium:** This iteration didn't change the controller medium, but it clarified it for external audiences. Building the GDC slides forced me to articulate the medium argument precisely: the phone is not a prop, it is the game's world. When you tilt it, you're not *controlling* a character — you're *moving* the space the character inhabits. The leaderboard persistence also belongs here: a shared, durable leaderboard changes the game from a solo experience into a social artifact. "Can I send my score to my friend?" was not a feature request — it was a signal that the medium was working.
+   **#medium:** The phone is still the medium. Nothing about the core controller argument changed this cycle. What changed is that the game now exists outside the room I'm standing in. Someone in a different timezone can open a URL and hold the wok. The persistent leaderboard changed too, in a way I didn't anticipate: a leaderboard with real names from real sessions turns the game from a solo toy into a shared artifact. "Can I send my score to my friend?" is a question about the medium, not the feature.
 
-   **#multimodalcommunication:** The GDC presentation materials (slides + script) had to communicate the same design across three simultaneous channels: the visual slide (dark game aesthetic, real game UI elements as figures), the spoken script (specific, not generic — real quotes, real infrastructure details), and the live demo (phone in hand, no explanation, let the gesture speak). Getting all three channels to reinforce rather than repeat each other is the same problem the game itself solves: visual, audio, and kinesthetic feedback that all say the same thing at the same time.
+   **#multimodalcommunication:** The GDC presentation materials required three channels to work at once: the visual slides (dark game aesthetic, actual game UI as proof figures), the spoken script (specific technical details, real playtester quotes, not generalities), and the live demo (phone in hand, no explanation, let the gesture do the work). Getting those three channels to reinforce each other instead of repeating each other is the same problem the game itself has. Visual feedback, audio feedback, and physical feedback all have to say the same thing, or the experience feels disconnected.
 
 ---
 
-## Appendix A: v0.7 Technical Changes
+## Appendix A: v0.7 technical changes
 
-### MSG Crystal Breathing Animation
+### MSG crystal breathing
 
-Added a scale-pulse to MSG crystals using `Math.sin(gameTime * freq + m.bob)` inside each crystal's existing `ctx.save()/ctx.restore()` draw block:
+Added a scale pulse to each MSG crystal in the existing `ctx.save()/ctx.restore()` draw block:
 
 ```javascript
 const breathe = 1 + 0.07 * Math.sin(gameTime * 2.5 + m.bob);
@@ -62,15 +62,15 @@ ctx.save();
 ctx.translate(m.x, m.y + bob);
 ctx.rotate(gameTime * 2 + m.bob);
 ctx.scale(breathe, breathe);
-// ... draw crystal ...
+// draw crystal
 ctx.restore();
 ```
 
-The frequency (2.5 rad/s) and amplitude (7%) were tuned so the pulse is perceptible but not distracting. The `m.bob` phase offset ensures each crystal breathes independently.
+Frequency is 2.5 rad/s, amplitude is 7%. The `m.bob` offset makes each crystal pulse independently. The purpose was visibility: static objects on a dark background were getting ignored during playtests.
 
-### ROOM ACTIVE Badge
+### ROOM ACTIVE badge
 
-Replaced the pressable "ROOM ACTIVE" button with a non-interactive status badge. The CSS class `.btn-relay--active` converts the element:
+Replaced the pressable button with a non-interactive status indicator:
 
 ```css
 .btn-relay--active {
@@ -79,64 +79,54 @@ Replaced the pressable "ROOM ACTIVE" button with a non-interactive status badge.
   color: #4cd964;
   pointer-events: none;
   cursor: default;
-  padding-left: 28px;
-  position: relative;
 }
 .btn-relay--active::before {
-  content: '';
-  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  /* pulsing green dot */
   width: 8px; height: 8px; border-radius: 50%;
-  background: #4cd964; box-shadow: 0 0 6px #4cd964;
+  background: #4cd964;
   animation: pulse-dot 1.8s ease-in-out infinite;
 }
 ```
 
-The badge is added on controller connect and removed on disconnect/error.
+Applied on controller connect, removed on disconnect. Playtesters stopped clicking it.
 
-### Tutorial Step 3 Sub-phases
+### Tutorial step 3 skip
 
-Stage 3 of the tutorial had three sub-phases that only advanced via timer. Added a Skip/Next button that calls `showStep3Phase(tutStep3Phase + 1)` if `tutorialStep === 3 && tutStep3Phase < 2`, short-circuiting the timeout. The button label updates per phase: "SKIP →" for phases 0 and 1, "NEXT →" for phase 2.
+The tutorial's third step had three sub-phases that only advanced on a timer. Added a button that calls `showStep3Phase(tutStep3Phase + 1)`, short-circuiting the timeout if the player already gets it. Label shows "SKIP" for phases 0/1, "NEXT" for phase 2.
 
-### Leaderboard Persistence — Upstash Redis
+### Leaderboard persistence (Upstash Redis)
 
-Replaced in-memory-only leaderboard with Upstash Redis via REST API (no SDK, no connection pool):
+REST API, no SDK. Server reads `sfr:scores` on boot, writes on every submission:
 
 ```javascript
-// Read on boot
+// read
 const r = await fetch(`${UPSTASH_URL}/get/${SCORES_KEY}`, {
   headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
 });
 const data = await r.json();
 const scores = data.result ? JSON.parse(data.result) : null;
 
-// Write on every new score
+// write
 await fetch(UPSTASH_URL, {
   method: 'POST',
-  headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
+  headers: {
+    Authorization: `Bearer ${UPSTASH_TOKEN}`,
+    'Content-Type': 'application/json'
+  },
   body: JSON.stringify(['SET', SCORES_KEY, JSON.stringify(serverScores)])
 });
 ```
 
-The key is `sfr:scores`. The database instance is `modest-grizzly` on AWS us-west-1 (North California). Scores cap at 50 entries; the top 10 are served to clients. Backwards compatible: if env vars are absent, falls back to in-memory.
+Database: modest-grizzly, AWS us-west-1. Key: `sfr:scores`. Cap: 50 entries, top 10 served to clients. Falls back to in-memory if env vars are absent.
 
-### Infrastructure: UptimeRobot Keep-warm
+### UptimeRobot keep-warm
 
-Render free tier sleeps after 15 minutes of inactivity. Previous solution (cron-job.org) failed 26 consecutive times and auto-disabled:
-
-**Root cause:** Render serves a large Cloudflare HTML "waking up" page before Node.js boots. cron-job.org has a response body size limit — the Cloudflare page trips it before `/health` ever responds with `"ok"`.
-
-**Fix:** UptimeRobot checks HTTP status code only (never reads the body). 5-minute ping interval keeps Render warm within its 15-minute sleep threshold. Public status page: `stats.uptimerobot.com/9mdhaV2mYt`.
+Render free tier sleeps after 15 minutes. Previous solution (cron-job.org) failed because Render's cold-start Cloudflare page exceeded cron-job.org's response body limit. UptimeRobot checks HTTP status code only, 5-minute interval. Public status: `stats.uptimerobot.com/9mdhaV2mYt`.
 
 ---
 
-## Appendix B: GDC Presentation Materials
+## Appendix B: GDC presentation materials
 
-A 10-slide HTML presentation (`docs/slides.html`) was built for GDC Alt. Ctrl. demo context:
+10-slide HTML presentation at `docs/slides.html`. Built with the game's own visual language: same radial-gradient background, scanlines overlay, Pixelify Sans for the game title, Outfit for body headings, VT323 for arcade data. The game's shrimp is reproduced as an SVG symbol (5 overlapping circles matching `drawStaticShrimp()` in game.js). Navigation is vertical scroll only. Real playtester quotes on slide 5. Specific infrastructure details on slides 6-7.
 
-- Dark game aesthetic (same radial-gradient BG, scanlines, Pixelify Sans / VT323 / Outfit type system as the game)
-- Exact game shrimp reproduced as SVG `<symbol>` (5 overlapping circles matching `drawStaticShrimp()` in `game.js`)
-- Vertical scroll navigation (keyboard ↑↓, scroll wheel, touch swipe)
-- Game UI elements used as proof-of-concept figures (oil bar, room code, leaderboard in VT323)
-- Real playtester quotes, specific infrastructure details (Upstash Redis key `sfr:scores`, `modest-grizzly` instance)
-
-A presenter script (`docs/SLIDES_SCRIPT.md`) covers per-slide timing, talking points, physical cues (when to hand the phone to the audience), and failure-recovery instructions.
+Presenter script at `docs/SLIDES_SCRIPT.md`. Per-slide talking points, timing (9:30 total + demo), physical cues (when to hand the phone to the audience), and failure-recovery instructions.
