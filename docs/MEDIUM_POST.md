@@ -1,101 +1,145 @@
-# The phone was the wok. The shrimp didn't know the difference.
+# The Shrimp Fried the Rice: How a Cooking Wok Became a Game Controller
 
-*An alt-controller game with one design rule: the controller and the narrative are the same object.*
+**An experimental game about role reversal, physical computing, and the gap between "it works" and "it feels right."**
 
-*Carl Kho · GDC Alt. Ctrl. Prototype · 2026*
+*Carl Vincent Kho · GDC Alt. Ctrl. Prototype · February 2026*
 
----
-
-Every alt-controller game at GDC has the same structural problem. The controller is interesting for exactly as long as it takes to understand what it does. After that — usually 30 seconds in — you're playing a game through a weird input device. The novelty was never the design. It was a skin over ordinary mechanics.
-
-I made a game called Shrimp Fried Rice. It has one rule I tried never to break: the controller and the narrative are the same object.
-
-The game runs on your phone. Your phone is a wok. Inside the wok, a pixel shrimp. When you tilt the phone, the shrimp slides toward the hot side. When you flick it upward — a quick spike in the beta axis of DeviceMotion — the shrimp goes airborne. Here's the part that took me longest to get right: if you were tilting slightly left when you jumped, the arc drifts left. Like a real toss. Because the gesture carries its own physics. You're not pressing a jump button. The trajectory comes from how you threw.
-
-I'm not certain this is a good game. I'm reasonably certain it was the right game to build.
+![Shrimp Fried Rice — pixel art of a wok with fried rice and shrimp on a kitchen counter](../image.png)
 
 ---
 
-## The design argument
+Benny tilted his phone, watched a pixel shrimp slide across a virtual wok, flicked upward, and grinned. Half the sensor pipeline was still held together with ngrok and a prayer, but the toss *felt right*. That grin is what I'd been building toward for three weeks.
 
-Most game controllers are encoding devices. The joystick encodes "I want the character to move here." The button encodes "I want this action." The input maps to an intention, which maps to an animation, which maps to a game state. Three abstraction layers, and the physical thing you hold is at the beginning, not inside.
+The game is called **Shrimp Fried Rice**. You play as a shrimp navigating a hot wok using your phone's gyroscope, collect MSG power-ups, fight the chef, and eventually *become* the chef defending your kitchen from waves of greedy human hands. The title is the punchline: **the shrimp fried the rice**.
 
-The wok skips the first layer.
-
-When you tilt the phone, you're not telling the shrimp to move left. You're moving the world the shrimp exists in. The shrimp slides because gravity. It goes airborne when you throw it because you threw it. The controller isn't inspired by the narrative — it is the narrative. A shrimp in a wok moves the way it does because you're holding the wok.
-
-This sounds like marketing copy. It isn't.
-
-During one of our in-class playtests, someone picked up the phone and started playing. About two minutes in, they stopped and said: "Wait, I'm moving the shrimp with my hand? Like — I'm the wok?"
-
-That's not a UI discovery. You don't have that moment when you understand a button layout. It's a realization about what kind of game you're actually playing, and it happened without explanation, mid-play, on a first attempt.
+Here's what I built and what broke.
 
 ---
 
-## What the code actually is
+## Why a Wok?
 
-The game is vanilla JavaScript and a Canvas 2D renderer. One game.js. No framework, no build step. The server is 230 lines — static file serving and WebSocket relay on a single port, no Express. The relay is a Map of room codes to socket pairs. Nothing about the relay understands what a shrimp is.
+The idea came from a design constraint, not inspiration. Professor Watson's Game Design course (GDC Alt. Ctrl. Prototype assignment) asked us to think about non-standard controllers. Most of my classmates reached for interesting *output* mechanics. I got stuck on the input.
 
-The sensor pipeline: the phone reads DeviceOrientation and DeviceMotion natively at 60Hz. You open a URL on your phone — scanned from a QR on the laptop screen, or typed manually, four digits. You're now in the room. The phone sends orientation data over WebSocket to the server, which forwards it to the game on the display. The game doesn't know whether the data came from a phone, a real wok with an MPU-6050 screwed to the handle, or a test script running locally.
+I'd been wandering through Gong Hua Digital Plaza in Taiwan, where you can buy an MPU-6050 six-axis gyroscope for less than a cup of coffee. I was already holding an IMU board when I spotted a wok at a kitchen stall across the aisle. The proximity was the design: what if the *medium of play* was the cooking motion itself?
 
-No Bluetooth. No app install. No pairing ceremony. You type four numbers.
-
-I explained this architecture to a friend who works in mobile dev. He said: "Why doesn't everyone do this?" I don't have a good answer. The technology has been in phones for years. It's possible everyone is waiting for a better reason.
+Tilt, toss, and shake map onto three game mechanics: *movement, jump, and attack*. "Naturally" is doing a lot of work in that sentence. The calibration system I ended up building — a 3-flick normalization routine that maps each player's personal toss strength to the game's physics — is the invisible hero of the project. Without it, the same flick that registers as a gentle toss on my phone produces a violent 30g spike on someone else's.
 
 ---
 
-## Infrastructure that had to survive the demo
+## The Architecture Nobody Notices
 
-The game is live at gd-003-shrimp-fried-rice.onrender.com. Render's free tier sleeps after 15 minutes of inactivity. A cold start takes about 30 seconds — which would kill a GDC demo if someone walked up between players.
+The game is **four files**. No framework, no build step, no server-side runtime:
 
-The fix is UptimeRobot, which pings /health every 5 minutes. /health returns two bytes: "ok". That's enough to keep Render awake within its sleep threshold.
+```
+build/
+├── index.html    ← Shell + all screens
+├── config.js     ← Tunable constants
+├── game.js       ← 1400 lines of vanilla JS
+└── style.css     ← Styling
+```
 
-I tried cron-job.org first. It failed 26 times in a row, then auto-disabled itself. The reason took me a while to figure out: Render serves a large Cloudflare HTML page during cold starts, before Node.js boots. cron-job.org has a response body size limit. That Cloudflare page trips it before my /health ever responds. UptimeRobot only checks the HTTP status code. It never reads the body. Problem gone.
+Everything runs in the browser. Audio is procedurally generated via the Web Audio API—10 distinct sound types, zero audio files. The sizzle when the shrimp rests on the hot wok is white noise filtered through a highpass at 800Hz with gain inversely proportional to velocity — the faster you move, the quieter it gets. Watson calls this "juice": screen shake, slow-mo on swat, procedural audio. Individually they're fine. Together, each physical gesture feels like it actually landed.
 
-The leaderboard lives in Upstash Redis at key `sfr:scores`, on AWS North California. No SDK. Just fetch. The database instance is called modest-grizzly. Scores survive any restart or redeploy. The REST-only approach means zero new server dependencies and nothing to keep warm.
+The sensor pipeline is where it gets interesting. The game supports three input modes simultaneously:
 
-Total monthly infrastructure cost: $0.00. This is not a selling point. It's just true, and I think it matters for anyone trying to demo a prototype game repeatedly over several months without a budget.
+1. **Phone sensors** (direct) — `DeviceOrientationEvent` for tilt, `DeviceMotionEvent` for toss/swat detection
+2. **Remote controller via WebSocket** — A phone connects to a relay server, sends sensor data to the game display on a laptop
+3. **ESP32 hardware wok** — MPU-6050 gyroscope + 4 piezo discs for hit zone detection, over WiFi
 
----
-
-## What playtesters actually said
-
-After completing Stage 1 on a first attempt, one playtester immediately said: "Okay let me play it again. We gotta finish you know."
-
-They had just won. They weren't frustrated. They wanted another run. That specific response — unprompted, right after completing the objective — happened more than once across different sessions.
-
-Another: "The jump feels exactly right. Like tossing food." That's the drift mechanic working. When the gesture carries its physics into the arc, the toss feels accurate not because it was designed to, but because it was structurally true. You throw something with a leftward lean and it goes left. Physics doesn't need to be complicated to feel right.
-
-A third, at the end of a session: "Can I send my score to my friend? I want them to try to beat it." I had no plans for a leaderboard. That question is the only reason one exists now.
+All three modes feed into the same unified `processMotion()` function. The game doesn't care where the data comes from.
 
 ---
 
-## What's still unresolved
+## The QR Code Pipeline (And Why It Matters)
 
-The calibration is fragile. Every person's "flick" is different in force and speed. The same gesture from two people produces completely different accelerometer values. My normalization routine — 3 quick flicks upward, take the average, set toss threshold at 60% and swat at 110% — works for most wrists. For some it's wrong in ways I haven't fully diagnosed. The sensor debug overlay (toggle with the bug button) shows you the raw values, but knowing what the numbers are doesn't always tell you what to do about them.
+The single most impactful UX improvement was adding a QR code to the title screen. Here's the flow:
 
-The tutorial explains the mechanics. I'm less sure it communicates what the game actually is. There's a gap between "tilt your phone to move" and "you are holding the world your character inhabits." I don't know how to close that gap without the explanation sounding absurd. Right now I'm relying on the physics to do it for me, which worked during the playtests, but that's a bet, not a design.
+1. The game opens on a laptop (the "display")
+2. Player clicks **GENERATE ROOM CODE**
+3. A WebSocket connection opens to a combined server (`serve.js` — static files + relay on one port)
+4. The server assigns a random 4-digit room code
+5. The game generates a QR code encoding: `https://{ngrok-url}/controller.html?relay={host}&code={room}`
+6. The player scans the QR code with their phone
+7. The controller page auto-connects, requests sensor permissions, and starts streaming orientation/motion data
+8. The game display receives sensor data in real-time and drives the shrimp
 
-Stage 2 (the chef's hand) and Stage 3 (the role reversal, where you become the chef) aren't shipped. Stage 1 is the submitted prototype. The design argument gets its real test when the physical mechanic has to hold up two stages in, with higher stakes and a flipped perspective. I don't know if it will.
+**Scan, allow sensors, play.** Five seconds total.
 
----
+This solved the actual hard problem: *getting a phone's sensors into a desktop browser over HTTPS*. Sensors require a secure context (`DeviceMotionEvent` only works on HTTPS origins). Local development means ngrok. And ngrok means a different URL every session. The QR code encodes the ephemeral URL, so the player never has to type `https://888c-183-82-51-162.ngrok-free.app/controller.html?relay=888c-183-82-51-162.ngrok-free.app&code=5428` on a phone keyboard. They just point their camera.
 
-## The question
-
-Does physicality change what a game means?
-
-The implicit test for any alt-controller game is whether the physical input is necessary or decorative. A lot of them are decorative. You could replace the gimmick with a mouse and the game would be the same game.
-
-What I found watching people play this one: when the controller is the game world, players understand the game the way they understand cooking — not by reading about it, but by doing it with their hands. You feel the hot side because you tilted toward it. The shrimp went crooked because you threw it crooked.
-
-That sensation wasn't designed. It fell out of the physics. Which might be the actual point: the most interesting parts of this game are consequences of a structural decision about what the controller is. I didn't add them. I just didn't remove them.
-
-I'm not sure what to do with that yet. The next two stages will either prove the thesis or break it.
+During our class playtest session, I distributed the game to 7 phones simultaneously: iPhone 16 Pro Max, iPhone 13 Pro, Pixel 6 Pro, iPhone 12, iPhone SE (2024), iPhone 16, and iPhone 15. The QR code was the only reason this was possible in under a minute. Without it, I would have spent the entire session dictating URLs.
 
 ---
 
-*The game is live at [gd-003-shrimp-fried-rice.onrender.com](https://gd-003-shrimp-fried-rice.onrender.com). Scan the QR, enter the 4-digit code, hold the phone flat.*
+## Cross-Device Compatibility: The Boring Miracle
 
-*Source: [github.com/CarlKho-Minerva/gd-003-shrimp-fried-rice](https://github.com/CarlKho-Minerva/gd-003-shrimp-fried-rice)*
+This section is about bugs, because the bugs are where the learning is.
 
-*Playtesters who held the phones: Benny, Dain, Chelsea, Angela, Manu, Laryssa, Jack, Nokutenda, Stiven, Artem.*
+**iOS Safari** requires explicit permission requests for both `DeviceOrientationEvent` *and* `DeviceMotionEvent`. You must call `DeviceOrientationEvent.requestPermission()` from a user gesture (button tap). My v0.3 only requested orientation permission. Tilt worked. Toss didn't. It took 45 minutes of debugging across two iPhones to figure out that *motion is a separate permission*.
+
+**Android Chrome** auto-grants sensor access over HTTPS—no permission prompt. But some builds of Chrome require navigating to `chrome://flags` and enabling "Generic Sensor Extra Classes." There's no error. The events just don't fire. The sensor debug overlay I built (toggle with the 🐛 button) saved hours here—it shows real-time orientation, acceleration, magnitude, threshold, device type, and permission status on every screen, including the title screen.
+
+**The combo that broke everything**: iPhone SE (2024) + Safari + ngrok free tier. Safari's privacy settings blocked the ngrok intermediary page (the "visit site" warning). The permission request fired, the user tapped "Allow," and then the page reloaded because of the ngrok warning—wiping the permission state. Fix: have the user tap through the ngrok warning *first*, then tap COOK.
+
+Seven devices. Seven different failure modes. Every single one was discovered by a human playtester physically holding a phone. No emulator in the world would have caught these.
+
+---
+
+## Three Stages of Role Reversal
+
+### Stage 1: Survive the Wok
+
+You're a shrimp in a hot wok. Tilt to slide, toss to jump. Oil drops keep you alive. Red hazards drain your health. Collect 5 MSG crystals to progress. This is the calibration stage in disguise—by the time the player has collected 5 MSG, they've internalized tilt, toss, and the wok's circular boundary physics.
+
+### Stage 2: Swat the Chef
+
+The chef reaches into the wok. You can ram his hand while airborne or swat it away with a hard shake. The mechanic mirrors real cooking—you're a shrimp fighting back against the hand stirring the wok. 4 HP. Defeat him to trigger the reversal.
+
+### Stage 3: Defend Your Wok
+
+**The Rataouille moment.** The MSG transforms you. You wear a chef hat now. The same wok, the same mechanics, but flipped: now *you* are the chef, and waves of human hands reach in from outside the rim to steal your ingredients. 3 escalating waves (2 → 3 → 5 hands), increasingly fast. Same tilt/toss/swat vocabulary—no new cognitive load.
+
+Watson's feedback on this stage redesign was pivotal. The original v0.4 was "Kitchen Pandemonium"—a 4-column kitchen management game with order cards and station systems. It was ambitious, confusing, and required an entirely new set of mechanics. Watson pointed us to *Froggy's Battle* as a model: same core loop, escalating challenge, upgrade paths. The wave defense redesign (v0.5) cut scope, increased polish, and—critically—reused the physical gestures the player had already learned.
+
+---
+
+## What I actually took away
+
+The controller is the design, not a delivery mechanism for the design. The same tilt mechanic on a keyboard and on a physical wok are two completely different games — not because the code changes, but because your body changes. I didn't fully understand that until I watched someone try to play with their wrist, then their elbow, then their whole arm.
+
+Calibration is UX nobody sees. My 3-flick normalization routine — average the player's natural flick strength, set toss at 60%, swat at 110% — is probably the most important thing I wrote. Nobody knows it exists. That's the point.
+
+You cannot emulate a person holding a phone. Seven human bodies found seven different failure modes. No automated test would have touched any of them.
+
+Juice compounds in a way I didn't expect. Screen shake, slow-mo on swat, procedural sizzle, haptic feedback — each one alone is fine. Together they make the toss feel *real*, which means the physical gesture actually means something. That's Watson's "every subsystem has to be fun" in practice.
+
+The part I didn't anticipate: this project is structurally identical to my capstone thesis. SOMACH maps EMG signals from the throat into digital commands via electrode normalization. The wok maps accelerometer spikes into game inputs via flick normalization. Same problem, different signal source. I only realized it halfway through building the calibration screen.
+
+---
+
+## Technical Specs
+
+| Component | Details |
+|-----------|---------|
+| **Game Engine** | Vanilla JavaScript, Canvas 2D, Web Audio API |
+| **Controller (Phone)** | `DeviceOrientationEvent` + `DeviceMotionEvent` over WebSocket |
+| **Controller (Hardware)** | ESP32 + MPU-6050 + 4× Piezo discs via WebSocket |
+| **Relay** | Node.js WebSocket server (20 lines of relay logic) |
+| **Hosting** | Static files — works on Vercel, Netlify, itch.io, GitHub Pages |
+| **Audio** | 10 procedural sound types, zero audio files |
+| **Compatibility** | Tested on 10+ devices (iPhone 12–16 Pro Max, Pixel 6 Pro/9a, iPhone SE 2024) |
+
+---
+
+## Play It
+
+- **Play in browser**: [gamedev-watson-26hyd.vercel.app/shrimp-fried-rice.html](https://gamedev-watson-26hyd.vercel.app/shrimp-fried-rice.html)
+- **itch.io**: [carlcrafterz.itch.io/shrimp-fried-rice-draft](https://carlcrafterz.itch.io/shrimp-fried-rice-draft)
+- **Source (build folder)**: [github.com/CarlKho-Minerva/gamedev-watson_26hyd/tree/main/game-3/build](https://github.com/CarlKho-Minerva/gamedev-watson_26hyd/tree/main/game-3/build)
+- **Hardware Build Guide**: [Wok Controller Instructable](https://gamedev-watson-26hyd.vercel.app/instructables_wok_controller.html) — ESP32 assembly, wiring, BOM
+
+---
+
+*Special thanks to the playtesters: Benny, Dain, Chelsea, Angela, Manu, Laryssa, Jack, Nokutenda, Stiven, Artem. You held the phones. That was the hard part.*
+
+*And to Professor Watson, whose feedback on v0.4 prompted the Stage 3 redesign that made the game actually work: "Every subsystem has to be fun." Still learning what that means.*
