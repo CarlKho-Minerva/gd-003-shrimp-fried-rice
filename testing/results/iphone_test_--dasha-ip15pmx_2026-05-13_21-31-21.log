@@ -1,0 +1,46 @@
+
+[START] Starting --dasha-ip15pmx Compatibility Test Suite...
+Connecting to ws://localhost:3000
+
+[Display] Connected. Requesting room code...
+[PASS] Display assigned Room Code: 4170
+[Controller] Connecting to Room: 4170
+[PASS] Controller successfully joined room.
+
+[RUN] Commencing Core Motion & Device Compatibility tests (--dasha-ip15pmx Profile)...
+
+[Display] Controller successfully paired.
+[Step] Early Orientation (pre-tilt-step gesture)
+   [Sent] Orientation [alpha:0, beta:5, gamma:3]
+[Display] Received Sensor Event -> orientation [x:0, y:5, z:3]
+[Step] Flat Position (Calibration Base)
+   [Sent] Orientation [alpha:0, beta:0, gamma:0]
+[Display] Received Sensor Event -> orientation [x:0, y:0, z:0]
+[Step] Tilt Left (Slide Shrimp Left)
+   [Sent] Orientation [alpha:0, beta:0, gamma:-45]
+[Display] Received Sensor Event -> orientation [x:0, y:0, z:-45]
+[Step] Tilt Right (Slide Shrimp Right)
+   [Sent] Orientation [alpha:0, beta:0, gamma:45]
+[Display] Received Sensor Event -> orientation [x:0, y:0, z:45]
+[Step] Back to Flat
+   [Sent] Orientation [alpha:0, beta:0, gamma:0]
+[Display] Received Sensor Event -> orientation [x:0, y:0, z:0]
+[Step] Calibration Flick 1 (Toss/Jump)
+   [Sent] Motion (Accel) [X:0, Y:15.5, Z:5.2]
+[Display] Received Sensor Event -> motion [x:0, y:15.5, z:5.2]
+[Step] Calibration Flick 2 (Toss/Jump)
+   [Sent] Motion (Accel) [X:0, Y:16.2, Z:4.8]
+[Display] Received Sensor Event -> motion [x:0, y:16.2, z:4.8]
+[Step] Calibration Flick 3 (Toss/Jump)
+   [Sent] Motion (Accel) [X:0, Y:17.1, Z:5.5]
+[Display] Received Sensor Event -> motion [x:0, y:17.1, z:5.5]
+[Step] Hard Shake (Swat Hand)
+   [Sent] Motion (Accel) [X:25, Y:-10, Z:30]
+[Display] Received Sensor Event -> motion [x:25, y:-10, z:30]
+[Step] Calibration Completion Verification (3rd flick)
+   [Sent] Motion (Accel) [X:0, Y:18, Z:6]
+[Display] Received Sensor Event -> motion [x:0, y:18, z:6]
+[Step] Test Complete. Disconnecting.
+
+[DONE] --dasha-ip15pmx device compatibility tests complete.
+       Passed: 12 | Failed: 0

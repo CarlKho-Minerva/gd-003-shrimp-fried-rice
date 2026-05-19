@@ -26,14 +26,15 @@
     COOK
   </button>
   <button onclick="autoConnectRelay()" id="relay-connect-btn" class="btn-relay" style="margin-top:18px">
-    GENERATE ROOM CODE
+    PLAY WITH PHONE CONTROLLER
   </button>
 
-  <!-- Room code display (shown after Generate Room Code is clicked) -->
+  <!-- Room code display (shown after PLAY WITH PHONE CONTROLLER is clicked) -->
   <div id="relay-box" style="display:none; margin-top:14px; text-align:center;">
     <div style="font-family:'Pixelify Sans',monospace; font-size:10px; color:#555; margin-bottom:6px; text-transform:uppercase; letter-spacing:2px;">ROOM CODE</div>
     <div id="relay-code-display" style="font-family:'Pixelify Sans',monospace; font-size:30px; font-weight:700; color:#4cd964; letter-spacing:6px; text-shadow:2px 2px 0 rgba(0,0,0,0.7), 0 0 20px rgba(76,217,100,0.4);">----</div>
-    <div id="relay-qr" style="margin-top:10px; display:flex; justify-content:center;"></div>
+    <div style="font-size:12px; color:rgba(255,255,255,0.5); margin-top:10px;">Scan the QR with your phone to play</div>
+    <div id="relay-qr" style="margin-top:8px; display:flex; justify-content:center;"></div>
     <div id="relay-controller-url" style="font-size:9px; color:rgba(255,255,255,0.25); margin-top:6px; word-break:break-all; text-align:center; font-family:'Outfit',sans-serif;"></div>
   </div>
 
@@ -66,6 +67,7 @@
       <div id="tut-flick-bar" class="tut-flick-bar"></div>
     </div>
     <div id="tut-flick-nudge" class="tut-nudge">Flick your phone upward</div>
+    <div class="tut-nudge" style="margin-top:8px;font-size:12px;color:rgba(255,255,255,.4)">If you see activity, you're good — hit NEXT</div>
   </div>
 
   <!-- Step 3: THE GOAL — items + mini gameplay demo -->
@@ -78,15 +80,15 @@
     <div class="goal-cards">
       <div class="goal-card goal-card-msg">
         <span class="goal-icon">✦</span>
-        <div><strong>Collect 5 MSG crystals</strong><br><span>to complete the stage</span></div>
+        <div><strong>Flick UP to JUMP · collect 5 MSG crystals</strong><br><span>You must jump into them — tilt to aim, flick to leap</span></div>
       </div>
       <div class="goal-card goal-card-oil">
         <span class="goal-icon">◉</span>
-        <div><strong>Grab oil to stay slippery</strong><br><span>it's also your health</span></div>
+        <div><strong>Grab oil drops to survive</strong><br><span>Oil is your health — when it runs out, you're cooked</span></div>
       </div>
       <div class="goal-card goal-card-danger">
         <span class="goal-icon">✕</span>
-        <div><strong>Avoid the red hazards</strong><br><span>they drain your oil fast</span></div>
+        <div><strong>Avoid the red hazards</strong><br><span>They drain your oil fast — tilt away from them</span></div>
       </div>
     </div>
   </div>

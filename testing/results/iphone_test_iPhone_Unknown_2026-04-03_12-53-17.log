@@ -1,0 +1,39 @@
+
+📱 Starting iPhone Unknown Compatibility Test Suite...
+Connecting to ws://localhost:3000
+
+🖥️  Display Connected. Requesting room code...
+✅ Display assigned Room Code: 2931
+📱 Connecting Controller to Room: 2931
+✅ Controller successfully joined room.
+
+🏃‍♂️ Commencing Core Motion & Device Compatibility tests (iPhone Unknown Profile)...
+
+🖥️  [Display Log] Controller successfully paired.
+⏱  [Test Step] Flat Position (Calibration Base)
+   📤 [Controller] Sent: Orientation [α:0, β:0, γ:0]
+🖥️  [Display Log] Received Sensor Event -> { type: 'orientation', alpha: 0, beta: 0, gamma: 0 }
+⏱  [Test Step] Tilt Left (Slide Shrimp Left)
+   📤 [Controller] Sent: Orientation [α:0, β:0, γ:-45]
+🖥️  [Display Log] Received Sensor Event -> { type: 'orientation', alpha: 0, beta: 0, gamma: -45 }
+⏱  [Test Step] Tilt Right (Slide Shrimp Right)
+   📤 [Controller] Sent: Orientation [α:0, β:0, γ:45]
+🖥️  [Display Log] Received Sensor Event -> { type: 'orientation', alpha: 0, beta: 0, gamma: 45 }
+⏱  [Test Step] Back to Flat
+   📤 [Controller] Sent: Orientation [α:0, β:0, γ:0]
+🖥️  [Display Log] Received Sensor Event -> { type: 'orientation', alpha: 0, beta: 0, gamma: 0 }
+⏱  [Test Step] Core Motion: Flick Upward 1 (Toss/Jump)
+   📤 [Controller] Sent: Motion (Accel) [X:0, Y:15.5, Z:5.2]
+🖥️  [Display Log] Received Sensor Event -> { type: 'motion', x: 0, y: 15.5, z: 5.2 }
+⏱  [Test Step] Core Motion: Flick Upward 2 (Toss/Jump)
+   📤 [Controller] Sent: Motion (Accel) [X:0, Y:16.2, Z:4.8]
+🖥️  [Display Log] Received Sensor Event -> { type: 'motion', x: 0, y: 16.2, z: 4.8 }
+⏱  [Test Step] Core Motion: Flick Upward 3 (Toss/Jump)
+   📤 [Controller] Sent: Motion (Accel) [X:0, Y:17.1, Z:5.5]
+🖥️  [Display Log] Received Sensor Event -> { type: 'motion', x: 0, y: 17.1, z: 5.5 }
+⏱  [Test Step] Hard Shake (Swat Hand)
+   📤 [Controller] Sent: Motion (Accel) [X:25, Y:-10, Z:30]
+🖥️  [Display Log] Received Sensor Event -> { type: 'motion', x: 25, y: -10, z: 30 }
+⏱  [Test Step] Test Complete. Disconnecting.
+
+🎉 All iPhone Unknown specific device compatibility core motion tests passed successfully!

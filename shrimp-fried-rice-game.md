@@ -98,16 +98,21 @@ _Note: Frequent visitor to Gong Hua Digital Plaza for electronics components_
 - [ ] Public demo and playtesting
 - [ ] Documentation and showcase materials
 
-## Target Venue: GDC Experimental Games
+## Target Venue: GDC & Alt.Ctrl.GDC
 
-**Game Developers Conference (GDC)** is one of the world's largest professional game industry events. The **Experimental Games** section showcases innovative, boundary-pushing game designs that explore new interaction methods and gameplay concepts.
+**Game Developers Conference (GDC)** is one of the world's largest professional game industry events. The project is aiming to be submitted to both the **Experimental Games Workshop** and the prestigious **Alt.Ctrl.GDC** showcase, which celebrates alternative controllers and boundary-pushing game designs that explore new interaction methods and gameplay concepts.
 
 ### Why This Game Fits
-- **Novel Controller**: Using actual cooking equipment as input device
+- **Novel Controller**: Using actual cooking equipment as input device, completely redefining standard play boundaries.
+- **Robust Field Testing**: Accompanied by rigorous automated testing suites spanning multiple devices (ensuring wide coverage, notably validating core motion inputs like upward flicking on high-end devices like the iPhone 16 Pro).
 - **Physical Interaction**: Bridges digital and physical cooking experience
 - **Cultural Element**: Incorporates Asian cooking culture and movements
 - **Humor**: Playful narrative with role-reversal twist
 - **Accessibility**: Intuitive, natural movements anyone can understand
+
+## Academic & Publication
+
+An accompanying **arXiv paper** is currently in development to be submitted alongside the showcase presentations. The paper will outline the intersection of hardware interfacing (ESP32/WebSocket/IMU sensors), subverted gameplay narrative loops (the 'Ratatouille moment'), and Human-Computer Interaction models derived from physical culinary actions.
 
 ## Design Philosophy
 

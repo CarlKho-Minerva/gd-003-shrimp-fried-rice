@@ -1,0 +1,21 @@
+
+[START] Starting iPhone Unknown Compatibility Test Suite...
+Connecting to ws://localhost:3000
+
+[Display] Connected. Requesting room code...
+[PASS] Display assigned Room Code: 1864
+[Controller] Connecting to Room: 1864
+[PASS] Controller successfully joined room.
+
+[RUN] Commencing Core Motion & Device Compatibility tests (iPhone Unknown Profile)...
+
+[Display] Controller successfully paired.
+[Step] Early Orientation (pre-tilt-step gesture)
+   [Sent] Orientation [alpha:0, beta:5, gamma:3]
+[Display] Received Sensor Event -> orientation [x:0, y:5, z:3]
+[Step] Flat Position (Calibration Base)
+   [Sent] Orientation [alpha:0, beta:0, gamma:0]
+[Display] Received Sensor Event -> orientation [x:0, y:0, z:0]
+[Step] Tilt Left (Slide Shrimp Left)
+   [Sent] Orientation [alpha:0, beta:0, gamma:-45]
+[Display] Received Sensor Event -> orientation [x:0, y:0, z:-45]

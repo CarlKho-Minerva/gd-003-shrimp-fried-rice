@@ -278,7 +278,7 @@ body::after {
   <div class="slide-num">01 / 10</div>
 
   <!-- Shrimp - game exact replica, bobbing -->
-  <svg viewBox="-42 -22 84 44" class="shrimp-bob" style="width:180px;height:auto;filter:drop-shadow(0 4px 16px rgba(255,107,53,.5))">
+  <svg viewBox="-42 -22 84 44" class="shrimp-bob" style="width:180px;height:auto;filter:drop-shadow(0 4px 16px rgba(255,107,53,.5));margin-top:16px">
     <use href="#shrimp"/>
   </svg>
 
@@ -306,7 +306,7 @@ body::after {
 ══════════════════════════════════════ -->
 <div class="slide">
   <div class="slide-num">02 / 10</div>
-  <div class="label" style="margin-bottom:20px">The design argument</div>
+  <div class="label" style="margin-bottom:20px">Why this works</div>
 
   <div class="bigquote">
     "The player holds the exact object<br>
@@ -314,9 +314,9 @@ body::after {
   </div>
 
   <p style="font-size:16px;color:var(--dim);text-align:center;max-width:600px;line-height:1.7;margin-top:32px">
-    When you tilt the wok — you're not pressing a joystick.<br>
+    When you tilt the wok, you're not pressing a joystick.<br>
     <strong style="color:var(--cream)">You're tilting the world they're cooked in.</strong><br>
-    That's the design. The controller and the narrative are the same object.
+    The phone is the wok. The controller is the story.
   </p>
 
   <!-- Mini game UI illustration — wok circle + shrimp inside -->
@@ -362,7 +362,7 @@ body::after {
           <path d="M 37,7 L 40,3 L 43,7" stroke="rgba(255,255,255,.3)" stroke-width="2" fill="none"/>
         </svg>
       </div>
-      <p style="font-size:13px;color:var(--dim);line-height:1.6">Rapid beta-axis acceleration triggers jump. Arc drift mid-air — a real toss isn't vertical.</p>
+      <p style="font-size:13px;color:var(--dim);line-height:1.6">Rapid beta-axis acceleration triggers jump. Mid-air drift happens because a real toss isn't vertical.</p>
     </div>
     <div style="display:flex;flex-direction:column;gap:12px">
       <div class="label">03 — Collect &amp; survive</div>
@@ -438,7 +438,7 @@ body::after {
   <div style="margin-top:24px;display:flex;flex-direction:column;align-items:center;gap:8px">
     <div class="label" style="letter-spacing:2px">Room code — shown on display</div>
     <div class="room-code">3124</div>
-    <div style="font-size:12px;color:var(--dim);letter-spacing:1.5px">↑ Controller scans QR → enters this → sensor data flows</div>
+    <div style="font-size:12px;color:var(--dim);letter-spacing:1.5px">Controller scans QR, enters this code, sensor data flows</div>
   </div>
 </div>
 
@@ -448,30 +448,30 @@ body::after {
 <div class="slide">
   <div class="slide-num">05 / 10</div>
   <div class="label" style="margin-bottom:8px">Playtester feedback · in-class sessions</div>
-  <h2 style="font-size:clamp(22px,3vw,36px);font-weight:800;margin-bottom:28px">The moment it clicked.</h2>
+  <h2 style="font-size:clamp(22px,3vw,36px);font-weight:800;margin-bottom:28px">People kept asking to play again.</h2>
 
   <div class="cols cols-2" style="max-width:860px;gap:20px">
     <div class="testimony">
       <div class="quote">"Okay let me play it again. We gotta finish you know."</div>
-      <div class="who">Playtester — after completing Stage 1 first attempt</div>
+      <div class="who">Playtester, after clearing Stage 1 on first try</div>
     </div>
     <div class="testimony">
       <div class="quote">"Wait, I'm moving the shrimp with my hand? Like — I'm the wok?"</div>
-      <div class="who">Playtester — realizing the input model mid-game</div>
+      <div class="who">Playtester, mid-game realization</div>
     </div>
     <div class="testimony">
       <div class="quote">"The jump feels exactly right. Like tossing food."</div>
-      <div class="who">Playtester — on the flick gesture after first session</div>
+      <div class="who">Playtester, after first session</div>
     </div>
     <div class="testimony">
       <div class="quote">"Can I send my score to my friend? I want them to try to beat it."</div>
-      <div class="who">Playtester — what led to building the persistent leaderboard</div>
+      <div class="who">Playtester, the reason I built the leaderboard</div>
     </div>
   </div>
 
   <div style="margin-top:20px;font-size:13px;color:var(--dim);text-align:center;max-width:600px;line-height:1.7">
-    The "let me play again" response appeared consistently.<br>
-    Most first runs ended with the same question: <strong style="color:var(--cream)">"where do I see my score?"</strong>
+    Nobody asked me how it worked. They just wanted to know<br>
+    <strong style="color:var(--cream)">"where's my score?"</strong>
   </div>
 </div>
 
@@ -487,7 +487,7 @@ body::after {
     <div class="stack-item">
       <div class="si-tag">Frontend</div>
       <div class="si-title">Vanilla JS + Canvas 2D</div>
-      <div class="si-desc">One game.js. No React, no bundler. Pixelify Sans + VT323 + Outfit for the three-tier type hierarchy. Web Audio API for procedural sound.</div>
+      <div class="si-desc">One game.js. No React, no bundler. Pixelify Sans + VT323 + Outfit for type. Web Audio API for procedural sound.</div>
     </div>
     <div class="stack-item">
       <div class="si-tag">Server</div>
@@ -497,12 +497,12 @@ body::after {
     <div class="stack-item">
       <div class="si-tag">Hosting</div>
       <div class="si-title">Render free tier</div>
-      <div class="si-desc">Auto-deploys on GitHub push. Custom /health endpoint kept warm by UptimeRobot. Has stayed live through every in-class session without a cold start.</div>
+      <div class="si-desc">Auto-deploys on GitHub push. /health endpoint pinged by UptimeRobot every 5 min. Stayed up through every in-class demo.</div>
     </div>
     <div class="stack-item">
       <div class="si-tag">Persistence</div>
       <div class="si-title">Upstash Redis</div>
-      <div class="si-desc">Key-value database on AWS North California. Leaderboard stored as JSON at key <code style="background:rgba(255,255,255,.06);padding:1px 5px;border-radius:3px;font-size:12px">sfr:scores</code>. REST API only — no SDK, no connection pool, survives any restart.</div>
+      <div class="si-desc">Key-value database on AWS North California. Leaderboard is JSON at key <code style="background:rgba(255,255,255,.06);padding:1px 5px;border-radius:3px;font-size:12px">sfr:scores</code>. REST API only, no SDK. Survives any restart.</div>
     </div>
   </div>
 </div>
@@ -513,8 +513,8 @@ body::after {
 <div class="slide">
   <div class="slide-num">07 / 10</div>
   <div class="label" style="margin-bottom:8px">Infrastructure</div>
-  <h2 style="font-size:clamp(22px,3vw,38px);font-weight:800;margin-bottom:6px">Free tier. Actually always on.</h2>
-  <p style="font-size:15px;color:var(--dim);margin-bottom:24px">Render free instances sleep after 15 minutes. Here's what defeats that.</p>
+  <h2 style="font-size:clamp(22px,3vw,38px);font-weight:800;margin-bottom:6px">Free tier that doesn't sleep.</h2>
+  <p style="font-size:15px;color:var(--dim);margin-bottom:24px">Render free instances go cold after 15 minutes. Here's how I fixed that.</p>
 
   <div class="cols cols-3" style="max-width:880px;gap:20px">
     <div class="game-panel" style="display:flex;flex-direction:column;gap:10px">
@@ -529,7 +529,7 @@ body::after {
     </div>
     <div class="game-panel" style="display:flex;flex-direction:column;gap:10px">
       <div class="label">Public status page</div>
-      <p style="font-size:14px;color:var(--dim);line-height:1.65">Live uptime history, response times, incident log. Shareable with judges or classmates. Proves it's not just "running on my machine."</p>
+      <p style="font-size:14px;color:var(--dim);line-height:1.65">Live uptime history, response times, incident log. I can share this with judges or classmates so nobody has to take my word for it.</p>
       <div class="url-chip" style="font-size:11px;margin-top:4px">stats.uptimerobot.com<br>/9mdhaV2mYt</div>
     </div>
   </div>
@@ -545,8 +545,8 @@ body::after {
 <div class="slide">
   <div class="slide-num">08 / 10</div>
   <div class="label" style="margin-bottom:8px">Live leaderboard</div>
-  <h2 style="font-size:clamp(22px,3vw,38px);font-weight:800;margin-bottom:6px">Every score. Every session. Remembered.</h2>
-  <p style="font-size:15px;color:var(--dim);margin-bottom:36px">Scores persist across restarts, redeploys, and device changes — written to Upstash Redis on submission.</p>
+  <h2 style="font-size:clamp(22px,3vw,38px);font-weight:800;margin-bottom:6px">Your score sticks around.</h2>
+  <p style="font-size:15px;color:var(--dim);margin-bottom:36px">Scores survive restarts and redeploys. They're in Upstash Redis, not memory.</p>
 
   <!-- Leaderboard UI reproduction (game style) -->
   <div style="width:100%;max-width:500px;background:var(--panel-bg);border:1px solid var(--border);border-radius:12px;overflow:hidden">
@@ -575,8 +575,8 @@ body::after {
   </div>
 
   <p style="font-size:13px;color:var(--dim);margin-top:20px;text-align:center;max-width:480px;line-height:1.65">
-    Beat Yuki at 28 seconds and you're top of the board.<br>
-    That score lives in Redis. It's not going anywhere.
+    Yuki has 28 seconds. That's the score to beat.<br>
+    It's sitting in Redis. Not going anywhere.
   </p>
 </div>
 
@@ -632,7 +632,7 @@ body::after {
       </div>
       <div class="nxt" style="border:none">
         <div class="nxt-tag">GDC 2027</div>
-        <div><div class="nxt-title">Alt. Ctrl. submission</div><div class="nxt-desc">"Does physicality change what the game means?" — Yes.</div></div>
+        <div><div class="nxt-title">Alt. Ctrl. submission</div><div class="nxt-desc">I want to find out if holding the game changes how it feels to play.</div></div>
       </div>
     </div>
 

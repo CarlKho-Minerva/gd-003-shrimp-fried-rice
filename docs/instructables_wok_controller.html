@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wok Controller Build Guide - Shrimp Fried Rice</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            line-height: 1.6;
+            color: #e0e0e0;
+            background: #121212;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #1e1e1e;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            border: 1px solid #333;
+        }
+        h1 { color: #ffffff; border-bottom: 4px solid #ff6b35; padding-bottom: 10px; margin-bottom: 30px; }
+        h2, h3, h4 { color: #ffffff; margin-top: 25px; margin-bottom: 15px; }
+        .step {
+            background: #252525;
+            border-left: 5px solid #ff6b35;
+            padding: 30px;
+            margin: 40px 0;
+            border-radius: 4px;
+        }
+        .step-number {
+            background: #ff6b35;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            float: left;
+        }
+        .step-title { font-size: 22px; font-weight: bold; color: #ffffff; margin-bottom: 15px; margin-left: 65px; }
+        .step-content { clear: both; margin-top: 15px; }
+        p, li { color: #cccccc; margin-bottom: 10px; }
+        strong { color: #ffffff; }
+        .diagram {
+            background: #000;
+            color: #ff6b35;
+            border: 1px solid #333;
+            padding: 20px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            white-space: pre;
+            line-height: 1.4;
+            border-radius: 4px;
+        }
+        .materials {
+            background: #1a1512;
+            border: 2px solid #ff6b35;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th { background: #2c1a12; color: white; padding: 12px; text-align: left; border: 1px solid #444; }
+        td { padding: 12px; border: 1px solid #444; color: #ddd; }
+        tr:nth-child(even) { background: #2a2a2a; }
+        code {
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            color: #f8f8f2;
+            border: 1px solid #444;
+        }
+        .tip { background: #1b3a20; border-left: 4px solid #4caf50; padding: 15px; margin: 20px 0; color: #e8f5e9; }
+        .tip strong { color: #81c784; }
+        .warning-box { background: #3a321e; border: 2px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px; color: #fff3cd; }
+        .warning-box strong { color: #ffca28; display: block; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🍳 Shrimp Fried Rice — Wok Hardware Build Guide</h1>
+    <p style="margin-bottom: 30px; font-size: 18px; color: #aaa;">
+        Step-by-step assembly for the ESP32 Wok Controller. Integrating an MPU-6050 gyroscope
+        and 4 piezo discs for spatula hit detection directly into game-3.
+    </p>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- SECTION A: DEMO SETUP (Phone + Mini Pan — No Electronics)  -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div style="background:#1a2e1a; border:2px solid #4cd964; border-radius:8px; padding:30px; margin-bottom:40px;">
+        <h2 style="color:#4cd964; margin-top:0;">🚀 DEMO SETUP (No Electronics Required)</h2>
+        <p style="color:#aaa; margin-bottom:20px;">
+            Use your <strong>phone strapped to a mini pan</strong> as the wok controller. The pan is the prop;
+            the phone's built-in gyroscope is the sensor. Works in minutes. This is the GDC Alt. Ctrl. demo path.
+        </p>
+        <div style="background:#111; padding:15px; border-radius:6px; margin-bottom:20px;">
+            <strong style="color:#fff;">Hardware used:</strong>
+            <span style="color:#ccc;"> Jensons Non-stick Mini Pan 12cm × 3.5cm (₹279, Zepto) + any smartphone</span>
+        </div>
+
+        <div class="step" style="border-left-color:#4cd964; margin-top:0;">
+            <div class="step-number" style="background:#4cd964; color:#000;">A1</div>
+            <div class="step-title">Mount the phone to the pan</div>
+            <div class="step-content">
+                <p>You need the phone to stay flat on the pan bottom so the gyroscope reads the pan's tilt, not the phone flopping around.</p>
+                <ol style="margin-left:20px; line-height:2.2;">
+                    <li>Place your phone <strong>face-up, flat in the pan bowl</strong> (the concave side). The 12cm pan snugly fits most phones.</li>
+                    <li>Wrap a <strong>thick rubber band</strong> twice around the pan + phone to secure it. Cross it in an X across the screen for stability. A velcro strap or gaffer tape works better for repeated demos.</li>
+                    <li>Make sure the phone screen is still touchable through the rubber band gap — you only need to tap once to grant sensor permission.</li>
+                    <li>Hold the pan from underneath like a <strong>serving platter</strong>, not by the handle. This gives the most natural tossing motion and stops the handle from interfering with full tilts.</li>
+                </ol>
+                <div class="tip" style="margin-top:15px;">
+                    <strong>Pan orientation:</strong> Hold the pan so the handle points toward your body. Forward/back tilt = Y-axis. Left/right tilt = X-axis. The calibration screen will handle the rest.
+                </div>
+            </div>
+        </div>
+
+        <div class="step" style="border-left-color:#4cd964;">
+            <div class="step-number" style="background:#4cd964; color:#000;">A2</div>
+            <div class="step-title">Start the server on your MacBook (display)</div>
+            <div class="step-content">
+                <p>Open Terminal on your MacBook and run:</p>
+                <div class="diagram">cd /path/to/gamedev-watson_26hyd/game-3
+./start.sh</div>
+                <p>The script starts the combined server + ngrok tunnel automatically. Wait ~5 seconds until you see:</p>
+                <div class="diagram">  ✅ NGROK TUNNEL ACTIVE
+  ══════════════════════
+  🖥️  Display (MacBook):  https://xxxx.ngrok-free.app
+  📱 Controller (Phone): https://xxxx.ngrok-free.app/controller.html?...</div>
+                <p>Leave this terminal open. Open the <strong>Display URL</strong> in Chrome on your MacBook — this is the game screen your audience watches.</p>
+                <div class="warning-box">
+                    <strong>ngrok not installed?</strong>
+                    Run <code>brew install ngrok</code> first, then <code>ngrok config add-authtoken YOUR_TOKEN</code> (free account at ngrok.com). HTTPS is required for phone sensors. Without ngrok, phone sensors block.
+                </div>
+            </div>
+        </div>
+
+        <div class="step" style="border-left-color:#4cd964;">
+            <div class="step-number" style="background:#4cd964; color:#000;">A3</div>
+            <div class="step-title">Generate the room code + QR</div>
+            <div class="step-content">
+                <ol style="margin-left:20px; line-height:2.2;">
+                    <li>On the game title screen (MacBook), click <strong>GENERATE ROOM CODE</strong>. Leave the relay URL field blank — it auto-detects the ngrok address.</li>
+                    <li>A <strong>4-digit code</strong> and a <strong>QR code</strong> appear on screen.</li>
+                    <li>Point your phone camera at the QR code. It opens the controller page with the room code already filled in.</li>
+                </ol>
+                <div class="tip">
+                    <strong>Showing to an audience?</strong> Full-screen the MacBook browser before generating the code. The QR code is large enough to scan from ~1m away.
+                </div>
+            </div>
+        </div>
+
+        <div class="step" style="border-left-color:#4cd964;">
+            <div class="step-number" style="background:#4cd964; color:#000;">A4</div>
+            <div class="step-title">Connect phone sensors (iOS) or auto-grant (Android)</div>
+            <div class="step-content">
+                <p><strong>iOS (iPhone/iPad):</strong></p>
+                <ol style="margin-left:20px; line-height:2.2;">
+                    <li>Safari opens the controller page. Tap <strong>CONNECT SENSORS</strong>.</li>
+                    <li>iOS shows two permission dialogs — tap <strong>Allow</strong> for both (Motion + Orientation).</li>
+                    <li>The screen shows <strong>✅ CONNECTED</strong> and starts streaming sensor data.</li>
+                    <li>On the MacBook game screen, a green <strong>🎮 Controllers: 1</strong> badge appears. The calibration screen auto-starts.</li>
+                </ol>
+                <p style="margin-top:15px;"><strong>Android (Chrome):</strong></p>
+                <ol style="margin-left:20px; line-height:2.2;">
+                    <li>Chrome opens the controller page. Tap <strong>CONNECT SENSORS</strong>.</li>
+                    <li>If sensors don't start, tap the lock icon in the address bar → <strong>Site settings</strong> → set <strong>Motion sensors</strong> to Allow → reload.</li>
+                </ol>
+                <div class="warning-box">
+                    <strong>iOS permission denied by accident?</strong>
+                    Settings → Safari → Advanced → Website Data → find the ngrok domain → delete it → reload the page.
+                </div>
+            </div>
+        </div>
+
+        <div class="step" style="border-left-color:#4cd964;">
+            <div class="step-number" style="background:#4cd964; color:#000;">A5</div>
+            <div class="step-title">Calibrate, then COOK</div>
+            <div class="step-content">
+                <ol style="margin-left:20px; line-height:2.2;">
+                    <li>The MacBook shows the <strong>CALIBRATE</strong> screen. Hold the pan flat and <strong>flick it upward sharply</strong> 3 times — like tossing a shrimp.</li>
+                    <li>After 3 flicks the game starts. <strong>Stage 1: Survive the Wok.</strong></li>
+                    <li><strong>Controls:</strong>
+                        <ul style="margin-left:20px; line-height:2;">
+                            <li><strong>Tilt pan</strong> left/right/forward/back → shrimp slides around the wok</li>
+                            <li><strong>Flick pan upward</strong> (sharp, medium force) → shrimp tosses/jumps</li>
+                            <li><strong>Hard shake</strong> (much harder than toss) → swat in Stage 2 &amp; 3</li>
+                        </ul>
+                    </li>
+                </ol>
+                <div class="tip">
+                    <strong>Demo tip:</strong> Do a quick 30-second run yourself first so the audience sees the mapping between pan motion and screen. Then hand it to them. The "oh!" moment happens immediately when they tilt and see the shrimp follow.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h2 style="color:#888; border-top:1px solid #333; padding-top:30px; margin-top:0;">
+        ⚙️ Advanced: ESP32 Hardware Controller (GDC Final Build)
+    </h2>
+    <p style="color:#666; margin-bottom:30px;">
+        Build a fully wireless wok controller with piezo hit zones for spatula detection.
+        Requires electronics sourcing (~2–3 hours build time). The phone demo above is identical in gameplay — build this for the full tactile experience at GDC.
+    </p>
+
+    <!-- WHAT YOU NEED -->
+    <div class="materials">
+        <h2 style="margin-top: 0;">📦 What You Need</h2>
+        <ul style="line-height: 2;">
+            <li><strong>1× Actual cooking Wok</strong> (the one from Gong Hua Digital Plaza)</li>
+            <li><strong>1× ESP32 NodeMCU</strong> (WiFi enabled microcontroller)</li>
+            <li><strong>1× MPU-6050</strong> (6-axis Accelerometer & Gyroscope module)</li>
+            <li><strong>4× Piezoelectric discs</strong> (27mm or 35mm works best)</li>
+            <li><strong>4× 1MΩ Resistors</strong> (Brown-Black-Green or Brown-Black-Black-Yellow)</li>
+            <li><strong>1× Small breadboard</strong> (or solder directly to protoboard)</li>
+            <li><strong>Jumper wires</strong> (Male-to-Male and Male-to-Female)</li>
+            <li><strong>Hot glue gun & tape</strong> (for mounting to the wok)</li>
+            <li><strong>5V USB battery bank</strong> (to power the ESP32 wirelessly)</li>
+        </ul>
+    </div>
+
+    <!-- STEP 1: MPU-6050 -->
+    <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-title">Wiring the MPU-6050 Gyroscope</div>
+        <div class="step-content">
+            <p>The MPU-6050 detects how you tilt and toss the wok. It uses <strong>I2C communication</strong> (4 wires total).</p>
+
+            <table>
+                <tr><th>MPU-6050 Pin</th><th>Connects to ESP32 Pin</th><th>Why?</th></tr>
+                <tr><td>VCC</td><td>3V3</td><td>Power</td></tr>
+                <tr><td>GND</td><td>GND</td><td>Ground</td></tr>
+                <tr><td>SDA</td><td>GPIO 21</td><td>I2C Data</td></tr>
+                <tr><td>SCL</td><td>GPIO 22</td><td>I2C Clock</td></tr>
+            </table>
+
+            <div class="diagram">
+  ESP32                           MPU-6050
+ ┌─────────────┐                 ┌──────────┐
+ │         3V3 ├─────────────────┤ VCC      │
+ │         GND ├─────────────────┤ GND      │
+ │          21 ├─────────────────┤ SDA      │
+ │          22 ├─────────────────┤ SCL      │
+ └─────────────┘                 └──────────┘
+            </div>
+
+            <div class="warning-box">
+                <strong>Mounting Orientation Matters!</strong>
+                Tape the MPU-6050 flat against the side of the wok handle. Make sure the
+                X and Y arrows printed on the blue circuit board align with the natural forward/backward tilting of the wok.
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 2: PIEZO DISCS -->
+    <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-title">Wiring the 4 Piezo Discs (Hit Detection)</div>
+        <div class="step-content">
+            <p>Piezo discs generate a small voltage spike when they are struck. We place 4 of them around the bottom of the wok (Top, Right, Bottom, Left). When you hit the wok with a spatula, the closest disc generates the highest voltage spike.</p>
+
+            <p><strong>Crucial Step: The 1MΩ Resistor</strong></p>
+            <p>A piezo can generate voltage spikes too high for the ESP32, and the signal "floats" unpredictably. You <strong>MUST</strong> place a 1MΩ resistor in parallel with each piezo (bridging its positive and negative wires) to pull the signal down safely.</p>
+
+            <div class="diagram">
+ PIEZO DISC #1 (TOP)
+   INNER CIRCLE (+ RED) ───┬──────────────▶ ESP32 GPIO 32
+                           │
+                         [1MΩ]
+                           │
+   OUTER RING (- BLK) ─────┴──────────────▶ ESP32 GND
+            </div>
+
+            <p><strong>Wiring all 4 discs to ESP32 ADC1 Pins:</strong></p>
+            <ul>
+                <li><strong>TOP Piezo</strong> + wire → <strong>GPIO 32</strong></li>
+                <li><strong>RIGHT Piezo</strong> + wire → <strong>GPIO 33</strong></li>
+                <li><strong>BOTTOM Piezo</strong> + wire → <strong>GPIO 34</strong></li>
+                <li><strong>LEFT Piezo</strong> + wire → <strong>GPIO 35</strong></li>
+                <li><strong>All Piezo - (black) wires</strong> → Connect together to ESP32 <strong>GND</strong></li>
+                <li>Include a 1MΩ resistor between the + and - of <em>each</em> disc.</li>
+            </ul>
+
+            <div class="tip">
+                <strong>Why ADC1?</strong>
+                The ESP32 has ADC1 and ADC2 pins. <strong>ADC2 pins cannot be read while WiFi is turned on!</strong>
+                Pins 32, 33, 34, and 35 are all ADC1, meaning they work perfectly alongside our WebSocket connection.
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 3: MOUNTING -->
+    <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-title">Mounting to the Wok</div>
+        <div class="step-content">
+            <p>How to physically attach this to your cooking wok so it survives aggressive S3 hand-swatting:</p>
+
+            <ol style="margin-left: 20px; line-height: 2;">
+                <li><strong>Piezos:</strong> Hot glue the solid copper side of the piezo discs flat against the <strong>outside bottom</strong> of the wok. Space them equally at 12, 3, 6, and 9 o'clock.</li>
+                <li><strong>Tape the wires:</strong> Tape all piezo wires flush against the wok surface so they don't snag while tossing. Route them up toward the handle.</li>
+                <li><strong>ESP32 & MPU-6050:</strong> Attach a small breadboard to the base of the wok handle using heavy-duty command strips or zip ties.</li>
+                <li><strong>Battery:</strong> Zip-tie a small USB battery bank to the handle to power the ESP32 wirelessly.</li>
+            </ol>
+        </div>
+    </div>
+
+    <!-- STEP 4: SOFTWARE -->
+    <div class="step">
+        <div class="step-number">4</div>
+        <div class="step-title">Flashing the ESP32 Sketch</div>
+        <div class="step-content">
+            <p>The code is already written in `esp32/wok_controller.ino`.</p>
+            <ol style="margin-left: 20px; line-height: 2;">
+                <li>Open Arduino IDE.</li>
+                <li>Install <code>ArduinoWebSockets</code>, <code>Arduino_JSON</code>, and <code>Adafruit MPU6050</code> from the Library Manager.</li>
+                <li>Open <code>wok_controller.ino</code>.</li>
+                <li>Change <code>ssid</code> and <code>password</code> to match your WiFi network.</li>
+                <li>Change <code>ws_host</code> to the URL of your relay server (e.g., your ngrok URL).</li>
+                <li>Upload to your ESP32.</li>
+            </ol>
+
+            <div class="diagram">
+// Inside wok_controller.ino
+const char* ssid = "MyPhoneHotspot";
+const char* password = "mypassword123";
+const char* ws_host = "1234-56-78.ngrok-free.app"; // No https://
+            </div>
+        </div>
+    </div>
+
+    <div class="step">
+        <div class="step-number">5</div>
+        <div class="step-title">Playing the Game</div>
+        <div class="step-content">
+            <ol style="margin-left: 20px; line-height: 2;">
+                <li>Start the combined server: <code>./start.sh</code> from the <code>game-3/</code> directory. This launches the static server + WebSocket relay + ngrok tunnel.</li>
+                <li>The terminal prints a Display URL and Controller URL. Open the <strong>Display URL</strong> on your laptop/monitor.</li>
+                <li>Click <strong>"GENERATE ROOM CODE"</strong> on the game title screen. A 4-digit code and QR code appear.</li>
+                <li>Update the ESP32 sketch's <code>ws_host</code> with the ngrok URL (e.g., <code>"888c-183-82-51-162.ngrok-free.app"</code>) and <code>roomCode</code> with the 4-digit code.</li>
+                <li>Upload the sketch and power on the ESP32. The game screen shows "Controller Connected".</li>
+                <li><strong>Start tossing!</strong> Tilt the wok to move, flick to toss, hit the wok with a spatula for piezo zone hits.</li>
+            </ol>
+
+            <div class="tip">
+                <strong>Quick Test Without Reflashing:</strong>
+                Instead of hardcoding the room code into the ESP32 sketch every time, you can use the <strong>phone controller</strong> for testing.
+                Just scan the QR code with your phone — it connects instantly. Save the ESP32 for the final demo.
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 6: TROUBLESHOOTING -->
+    <div class="step">
+        <div class="step-number">6</div>
+        <div class="step-title">Troubleshooting</div>
+        <div class="step-content">
+            <table>
+                <tr><th>Problem</th><th>Cause</th><th>Fix</th></tr>
+                <tr>
+                    <td>ESP32 won't connect to WiFi</td>
+                    <td>Wrong SSID/password, or 5GHz network</td>
+                    <td>ESP32 only supports <strong>2.4GHz WiFi</strong>. Use your phone's hotspot if the local network is 5GHz only. Double-check SSID spelling (case-sensitive).</td>
+                </tr>
+                <tr>
+                    <td>WebSocket connection fails</td>
+                    <td>Firewall, wrong host, or ngrok expired</td>
+                    <td>Check that ngrok is running (<code>curl http://localhost:4040/api/tunnels</code>). Restart <code>./start.sh</code> if the session expired (free tier = ~2 hours).</td>
+                </tr>
+                <tr>
+                    <td>"Room not found" error</td>
+                    <td>Room code mismatch or display disconnected</td>
+                    <td>The display must be connected FIRST (it creates the room). Then the ESP32 joins with the correct code. If you reloaded the game page, the old room code is gone — generate a new one.</td>
+                </tr>
+                <tr>
+                    <td>Tilt works but toss doesn't trigger</td>
+                    <td>MPU-6050 orientation or threshold issue</td>
+                    <td>Open the 🐛 sensor debug overlay on the game. Check the "mag" (magnitude) value when you flick. If it's below the threshold (default: 15), your flick isn't hard enough, or the MPU-6050 is mounted at a bad angle. Remount flat on the handle.</td>
+                </tr>
+                <tr>
+                    <td>Piezo hits not registering</td>
+                    <td>Missing 1MΩ resistor, bad solder joint, or wrong ADC pin</td>
+                    <td>
+                        1. Check that each piezo has a 1MΩ resistor in parallel.<br>
+                        2. Open Arduino Serial Monitor — you should see "HIT! Zone: X | Val: Y" when you tap the wok.<br>
+                        3. If Val is always 0, check wiring. If Val is always 4095, the resistor is missing or disconnected.<br>
+                        4. Ensure you're using ADC1 pins (32, 33, 34, 35). ADC2 pins are disabled while WiFi is active.
+                    </td>
+                </tr>
+                <tr>
+                    <td>All 4 piezos trigger at once</td>
+                    <td>Wok vibration propagates to all discs</td>
+                    <td>This is normal for aggressive hits. The code picks the <strong>strongest</strong> reading as the zone. For more isolation, add rubber washers between the piezo and the wok surface, or increase <code>HIT_THRESHOLD</code> in the sketch.</td>
+                </tr>
+                <tr>
+                    <td>ESP32 resets/crashes during play</td>
+                    <td>Power issue or voltage spike from piezo</td>
+                    <td>Use a quality USB battery bank (at least 1A output). If still crashing, add a 100nF capacitor between each piezo+ and GND to filter spikes.</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- STEP 7: COMPLETE WIRING REFERENCE -->
+    <div class="step">
+        <div class="step-number">7</div>
+        <div class="step-title">Complete Wiring Reference</div>
+        <div class="step-content">
+            <p>All connections in one place:</p>
+
+            <div class="diagram">
+                          ESP32 NodeMCU
+                    ┌─────────────────────┐
+                    │                     │
+    MPU-6050 SDA ───┤ GPIO 21         3V3 ├─── MPU-6050 VCC
+    MPU-6050 SCL ───┤ GPIO 22         GND ├─── MPU-6050 GND
+                    │                     │     ┊ (shared GND bus)
+   Piezo TOP (+) ───┤ GPIO 32             ├     ┊
+  Piezo RIGHT (+) ──┤ GPIO 33             │     ┊
+ Piezo BOTTOM (+) ──┤ GPIO 34             │     ┊ All Piezo (-)
+  Piezo LEFT (+) ───┤ GPIO 35             │     ┊ wires connect
+                    │                     │     ┊ to GND
+                    │              USB ───┤─── 5V Battery Bank
+                    └─────────────────────┘
+
+  Each Piezo (+) has a 1MΩ resistor bridging to its own (-) wire.
+            </div>
+
+            <h4>Bill of Materials (with approximate cost)</h4>
+            <table>
+                <tr><th>Item</th><th>Qty</th><th>Approx. Cost</th><th>Where to Buy</th></tr>
+                <tr><td>ESP32 NodeMCU</td><td>1</td><td>$4–8</td><td>AliExpress, Amazon, Gong Hua Digital Plaza</td></tr>
+                <tr><td>MPU-6050 module</td><td>1</td><td>$1–3</td><td>AliExpress, Amazon</td></tr>
+                <tr><td>27mm Piezo discs</td><td>4</td><td>$2 (pack of 10)</td><td>AliExpress, electronics stores</td></tr>
+                <tr><td>1MΩ Resistors</td><td>4</td><td>$0.50 (pack of 100)</td><td>Any electronics store</td></tr>
+                <tr><td>Mini breadboard</td><td>1</td><td>$1</td><td>Any electronics store</td></tr>
+                <tr><td>Jumper wires (M-M, M-F)</td><td>~20</td><td>$2</td><td>Any electronics store</td></tr>
+                <tr><td>USB battery bank (5V, 1A+)</td><td>1</td><td>$5–10</td><td>Amazon, any store</td></tr>
+                <tr><td>Cooking Wok</td><td>1</td><td>$5–15</td><td>Kitchen store, market</td></tr>
+                <tr><td>Hot glue gun + sticks</td><td>1</td><td>$3</td><td>Hardware store</td></tr>
+                <tr><td>Electrical tape</td><td>1 roll</td><td>$1</td><td>Hardware store</td></tr>
+                <tr><td><strong>TOTAL</strong></td><td></td><td><strong>~$25–45</strong></td><td></td></tr>
+            </table>
+
+            <div class="tip">
+                <strong>Budget Option (~$15):</strong>
+                Skip the piezos and battery bank. Use only the ESP32 + MPU-6050 for tilt/toss detection. The game works fine without piezo hit zones —
+                just use phone shake or screen tap for swat actions. Add piezos later as an upgrade.
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP 8: CALIBRATION TIPS -->
+    <div class="step">
+        <div class="step-number">8</div>
+        <div class="step-title">Calibration & Tuning Tips</div>
+        <div class="step-content">
+            <h4>MPU-6050 Mounting Angle</h4>
+            <p>The MPU-6050's X/Y axes should align with how you naturally tilt the wok:</p>
+            <ul style="margin-left: 20px; line-height: 2;">
+                <li><strong>Mount flat on the handle</strong> — the blue PCB parallel to the handle surface.</li>
+                <li><strong>X axis = left/right tilt</strong> (roll the wok sideways).</li>
+                <li><strong>Y axis = forward/back tilt</strong> (tip the wok toward/away from you).</li>
+                <li>If tilt feels "backwards" or "swapped," rotate the MPU-6050 90° and re-tape.</li>
+            </ul>
+
+            <h4>Piezo Sensitivity</h4>
+            <ul style="margin-left: 20px; line-height: 2;">
+                <li><code>HIT_THRESHOLD</code> in the sketch controls how hard you need to hit. Default: 500 (out of 4095).</li>
+                <li><strong>Too sensitive</strong> (false triggers from wok vibration): increase to 800–1000.</li>
+                <li><strong>Too insensitive</strong> (misses hits): decrease to 200–300.</li>
+                <li>Open Arduino Serial Monitor at 115200 baud to see raw readings while tapping.</li>
+            </ul>
+
+            <h4>In-Game Calibration</h4>
+            <p>The game has a built-in 3-flick calibration screen. It averages your 3 strongest flicks and sets:</p>
+            <ul style="margin-left: 20px; line-height: 2;">
+                <li><strong>Toss threshold</strong> = 60% of your average flick strength.</li>
+                <li><strong>Swat threshold</strong> = 110% of your average flick strength.</li>
+            </ul>
+            <p>This means a gentle flick = toss, a hard shake = swat. The game adapts to your strength, not the other way around.</p>
+
+            <div class="warning-box">
+                <strong>The "It Doesn't Feel Right" Problem</strong>
+                If the wok feels laggy or unresponsive, check three things in order:
+                <ol style="margin-left: 20px; line-height: 2;">
+                    <li><strong>Network latency:</strong> Open the sensor debug overlay (🐛). Tilt the wok and watch if the numbers update smoothly. Lag > 100ms means your WiFi/ngrok connection is slow.</li>
+                    <li><strong>Sensor update rate:</strong> <code>SENSOR_INTERVAL</code> in the sketch is 20ms (50fps). If your ESP32 can't keep up, increase to 33ms (30fps).</li>
+                    <li><strong>Mounting vibration:</strong> If the MPU-6050 wobbles on loose tape, the gyroscope readings oscillate. Hot glue is more stable than tape for the final build.</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>

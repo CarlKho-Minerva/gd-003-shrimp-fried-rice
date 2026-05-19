@@ -24,6 +24,7 @@ Inspired by the "Ratatouille moment"—the absurd chaos that erupts when the cul
 -   **Procedural Audio**: 100% code-generated sound effects via Web Audio API (10 sound types).
 -   **Mobile Sensors**: Play in the browser on your phone—uses `DeviceMotionEvent` + `DeviceOrientationEvent` for tilt & shake.
 -   **iOS + Android**: Full compatibility — requests both orientation AND motion permissions on iOS; auto-grants on Android.
+-   **Automated Testing Suite**: Includes a dedicated `testing/iphone16_pro_test_suite.js` to simulate iPhone 16 Pro core motion and upward flicking for wider coverage size and robustness.
 -   **Calibration System**: Built-in 3-flick calibration to map your physical tossing strength to game logic.
 -   **Sensor Debug Overlay**: Real-time accelerometer/orientation viewer (🐛 toggle) for cross-device testing.
 -   **Upgrade System**: MSG currency → 4 upgrade paths (Watson's Froggy's Battle model).
@@ -39,7 +40,7 @@ Sensors require HTTPS. The easiest cross-device method is [ngrok](https://ngrok.
 
 ```bash
 # Terminal 1 — local server
-cd game-3/build
+cd /Users/cvk/Downloads/carl/gamedev-watson_26hyd/game-3/build
 python3 -m http.server 8080
 
 # Terminal 2 — ngrok tunnel (gives you an HTTPS URL)
@@ -137,7 +138,7 @@ Tested across multiple iOS and Android devices via ngrok HTTPS tunnel (Feb 19, 2
 
 | Device | Tester |
 | :--- | :--- |
-| iPhone 16 Pro | **Benny** (also helped debug sensor permission flow) |
+| iPhone 16 Pro | **Benny** (also helped debug sensor permission flow), **CVK** (Automated core motion / upward flicking test suite) |
 | iPhone 14 Pro | **Dain** |
 | iPhone 12 | **Chelsea** |
 | iPhone SE (2024) | **Angela** |

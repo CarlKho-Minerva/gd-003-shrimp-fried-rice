@@ -1030,7 +1030,7 @@ function connectToRelay(host) {
   };
 
   relayWS.onerror = () => {
-    if (btn) { btn.textContent = 'GENERATE ROOM CODE'; btn.disabled = false; btn.classList.remove('btn-relay--active'); }
+    if (btn) { btn.textContent = 'PLAY WITH PHONE CONTROLLER'; btn.disabled = false; btn.classList.remove('btn-relay--active'); }
     const box = $('relay-box');
     if (box) {
       box.style.display = 'block';
@@ -1043,7 +1043,7 @@ function connectToRelay(host) {
   };
 
   relayWS.onclose = () => {
-    if (!relayRoom && btn) { btn.textContent = 'GENERATE ROOM CODE'; btn.disabled = false; btn.classList.remove('btn-relay--active'); }
+    if (!relayRoom && btn) { btn.textContent = 'PLAY WITH PHONE CONTROLLER'; btn.disabled = false; btn.classList.remove('btn-relay--active'); }
   };
 
   relayWS.onmessage = (e) => {
@@ -1393,7 +1393,7 @@ function showStep3Phase(phase) {
   // Update the step title per phase
   const h2 = document.querySelector('#tut-step-3 h2');
   if (h2) {
-    const titles = ['COLLECT MSG', 'OIL = HEALTH', 'AVOID DANGER'];
+    const titles = ['JUMP FOR MSG', 'OIL = HEALTH', 'AVOID DANGER'];
     h2.textContent = titles[phase] || 'THE GOAL';
   }
 
@@ -1499,6 +1499,7 @@ function startGameplay() {
   // Lock to portrait so landscape rotation doesn't flip the tilt axes
   try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('portrait-primary').catch(() => {}); } catch (e) {}
   announce('STAGE 1', 'SURVIVE THE WOK');
+  setTimeout(() => { announce('FLICK UP TO JUMP!', 'Tilt to move · Jump to collect MSG', 3000); }, 1200);
   spawnOil();
 }
 

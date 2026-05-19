@@ -1,5 +1,25 @@
 # Shrimp Fried Rice — Changelog
 
+## v0.6 — "Welcome, Chef" (2026-03-18)
+
+### FTUE Onboarding Walkthrough
+- **Added 5-step first-time user experience (FTUE)** slideshow triggered on COOK button or controller connect.
+- Steps: Welcome → Tilt → Flick & Swat → The Goal → Calibrate preview.
+- Tutorial now starts from step 0 (was step 1), with a narrative welcome screen: "You are a shrimp trapped in a sizzling wok."
+- Final step previews calibration before entering the actual calibration screen.
+
+### Critical Fix: Controller Connection Flow
+- **Fixed**: Remote controller connecting on the title screen no longer skips the tutorial entirely. Previously, `controller-connected` on `STAGE.TITLE` called `skipCalibration()` which jumped straight to gameplay. Now it routes through the full FTUE walkthrough first.
+- Controllers connecting during `STAGE.CALIBRATE` still auto-skip calibration (remote controllers use defaults).
+
+### Documentation
+- **Medium blog post** added: `docs/MEDIUM_POST.md` — full write-up of the project in Patrick Watson's analytical style.
+- **Assignment coversheet updated** to v0.6 with Appendix A (QR Code Connection Pipeline technical breakdown) and Appendix B (FTUE Walkthrough details).
+- **HOSTING.md rewritten** with expanded itch.io guide, relay server hosting options (Render, Railway, Fly.io), Steam/GOG/Epic publishing notes, and "The Relay Problem" section explaining why static hosts alone aren't enough for the phone controller flow.
+- **Instructables expanded** with: troubleshooting table, complete wiring reference, bill of materials with costs (~$25-45 total), calibration & tuning tips, budget option (~$15 without piezos).
+
+---
+
 ## v0.5 — "The Shrimp Fried the Rice" (2026-02-19)
 
 ### Stage 3: Wave Defense Redesign
